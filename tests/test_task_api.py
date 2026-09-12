@@ -2,12 +2,17 @@
 
 from collections.abc import Generator
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
+from backend.app.auth.anonymous import hash_installation_credential
+from backend.app.db.models import Image, Owner, Scan, Source, Task
 from backend.app.db.session import Database
 from backend.app.main import create_app
 
@@ -116,6 +121,20 @@ def _create_task(
     return _json_body(response.json())
 
 
+def _error_body(response_json: Any) -> dict[str, Any]:
+    """Return a structured error response body.
+
+    Args:
+        response_json: Parsed JSON response body.
+
+    Returns:
+        Structured API error body.
+    """
+
+    body = _json_body(response_json)
+    return cast(dict[str, Any], body["error"])
+
+
 def test_manual_task_lifecycle_is_owner_scoped(app_harness: AppHarness) -> None:
     """Create, update, list, and delete a task within one owner boundary."""
 
@@ -193,6 +212,41 @@ def test_manual_task_lifecycle_is_owner_scoped(app_harness: AppHarness) -> None:
     assert empty.json() == {"tasks": []}
 
 
+@pytest.mark.parametrize(
+    ("method", "path", "json_body"),
+    [
+        ("post", "/v1/tasks", {"client_request_id": "manual-auth", "title": "Title"}),
+        ("patch", f"/v1/tasks/{uuid4()}", {"title": "Updated"}),
+        ("delete", f"/v1/tasks/{uuid4()}", None),
+        ("delete", "/v1/data", None),
+    ],
+)
+def test_manual_task_write_endpoints_require_installation_credentials(
+    app_harness: AppHarness,
+    method: str,
+    path: str,
+    json_body: dict[str, str] | None,
+) -> None:
+    """Verify mutating task endpoints require bearer credentials.
+
+    Args:
+        app_harness: API test harness.
+        method: HTTP method to call.
+        path: Endpoint path to call.
+        json_body: Optional JSON request body.
+    """
+
+    response = app_harness.client.request(method, path, json=json_body)
+    error = _error_body(response.json())
+
+    assert response.status_code == 401
+    assert error == {
+        "code": "unauthorized",
+        "message": "Missing anonymous installation credentials.",
+        "retryable": False,
+    }
+
+
 def test_manual_task_create_is_idempotent_per_owner(
     app_harness: AppHarness,
 ) -> None:
@@ -229,6 +283,38 @@ def test_manual_task_create_is_idempotent_per_owner(
     assert len(listed.json()["tasks"]) == 1
 
 
+@pytest.mark.parametrize(
+    "json_body",
+    [
+        {"client_request_id": "missing-title"},
+        {"client_request_id": "empty-title", "title": ""},
+        {"client_request_id": "extra-field", "title": "Title", "extra": "nope"},
+    ],
+)
+def test_manual_task_create_rejects_invalid_payloads(
+    app_harness: AppHarness,
+    json_body: dict[str, str],
+) -> None:
+    """Reject invalid manual task create payloads.
+
+    Args:
+        app_harness: API test harness.
+        json_body: Invalid JSON body to submit.
+    """
+
+    credential = _install(app_harness.client)
+    response = app_harness.client.post(
+        "/v1/tasks",
+        headers=_headers(credential),
+        json=json_body,
+    )
+    error = _error_body(response.json())
+
+    assert response.status_code == 400
+    assert error["code"] == "invalid_request"
+    assert error["retryable"] is False
+
+
 def test_clear_data_deletes_only_authenticated_owner_tasks(
     app_harness: AppHarness,
 ) -> None:
@@ -262,6 +348,100 @@ def test_clear_data_deletes_only_authenticated_owner_tasks(
     assert len(other_tasks) == 1
 
 
+def test_clear_data_removes_retained_owner_records(
+    app_harness: AppHarness,
+) -> None:
+    """Clear sources, scans, images, and tasks within one owner boundary."""
+
+    owner_credential = _install(app_harness.client)
+    other_credential = "other-retained-records"
+    expires_at = datetime.now(UTC) + timedelta(hours=1)
+
+    with app_harness.database.session_factory() as session:
+        owner = session.scalar(
+            select(Owner).where(
+                Owner.installation_credential_hash
+                == hash_installation_credential(owner_credential)
+            )
+        )
+        other_owner = Owner(
+            installation_credential_hash=hash_installation_credential(other_credential)
+        )
+        assert owner is not None
+        owner_id = owner.id
+        session.add(other_owner)
+        session.flush()
+        other_owner_id = other_owner.id
+        session.add_all(
+            [
+                Source(owner_id=owner.id, source_key="https://example.com/owner"),
+                Source(owner_id=other_owner.id, source_key="https://example.com/other"),
+                Scan(
+                    owner_id=owner.id,
+                    client_request_id="owner-scan",
+                    state="queued",
+                ),
+                Scan(
+                    owner_id=other_owner.id,
+                    client_request_id="other-scan",
+                    state="queued",
+                ),
+                Image(
+                    owner_id=owner.id,
+                    storage_key="owner-image",
+                    content_type="image/png",
+                    size_bytes=128,
+                    expires_at=expires_at,
+                ),
+                Image(
+                    owner_id=other_owner.id,
+                    storage_key="other-image",
+                    content_type="image/png",
+                    size_bytes=128,
+                    expires_at=expires_at,
+                ),
+                Task(
+                    owner_id=owner.id,
+                    origin="manual",
+                    type="manual",
+                    title="Owner task",
+                    status="in_progress",
+                    processing_state="ready",
+                ),
+                Task(
+                    owner_id=other_owner.id,
+                    origin="manual",
+                    type="manual",
+                    title="Other task",
+                    status="in_progress",
+                    processing_state="ready",
+                ),
+            ]
+        )
+        session.commit()
+
+    cleared = app_harness.client.delete("/v1/data", headers=_headers(owner_credential))
+
+    assert cleared.status_code == 200
+    assert cleared.json() == {"deleted_tasks": 1}
+
+    with app_harness.database.session_factory() as session:
+        remaining_source = session.scalars(select(Source)).one()
+        remaining_scan = session.scalars(select(Scan)).one()
+        remaining_image = session.scalars(select(Image)).one()
+        remaining_task = session.scalars(select(Task)).one()
+
+        assert remaining_source.owner_id == other_owner_id
+        assert remaining_source.source_key == "https://example.com/other"
+        assert remaining_scan.owner_id == other_owner_id
+        assert remaining_scan.client_request_id == "other-scan"
+        assert remaining_image.owner_id == other_owner_id
+        assert remaining_image.storage_key == "other-image"
+        assert remaining_task.owner_id == other_owner_id
+        assert remaining_task.title == "Other task"
+        assert owner_id != other_owner_id
+
+
 def test_empty_patch_is_rejected(app_harness: AppHarness) -> None:
     """Reject a patch that would mutate nothing."""
 
@@ -281,3 +461,81 @@ def test_empty_patch_is_rejected(app_harness: AppHarness) -> None:
 
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "invalid_request"
+
+
+@pytest.mark.parametrize(
+    "json_body",
+    [
+        {"status": "not_real"},
+        {"title": ""},
+        {"status_reason": ""},
+        {"title": "Updated", "unexpected": "nope"},
+    ],
+)
+def test_manual_task_patch_rejects_invalid_payloads(
+    app_harness: AppHarness,
+    json_body: dict[str, str],
+) -> None:
+    """Reject invalid manual task patch payloads.
+
+    Args:
+        app_harness: API test harness.
+        json_body: Invalid JSON body to submit.
+    """
+
+    credential = _install(app_harness.client)
+    task = _create_task(
+        app_harness.client,
+        credential,
+        client_request_id="manual-invalid-patch",
+        title="Review patch validation",
+    )
+
+    response = app_harness.client.patch(
+        f"/v1/tasks/{task['id']}",
+        headers=_headers(credential),
+        json=json_body,
+    )
+    error = _error_body(response.json())
+
+    assert response.status_code == 400
+    assert error["code"] == "invalid_request"
+    assert error["retryable"] is False
+
+
+def test_manual_patch_rejects_detected_tasks(app_harness: AppHarness) -> None:
+    """Keep detected tasks immutable through the manual task patch endpoint."""
+
+    credential = _install(app_harness.client)
+
+    with app_harness.database.session_factory() as session:
+        owner = session.scalar(
+            select(Owner).where(
+                Owner.installation_credential_hash
+                == hash_installation_credential(credential)
+            )
+        )
+        assert owner is not None
+        task = Task(
+            owner_id=owner.id,
+            origin="detected",
+            source_key="https://example.com/pr/1",
+            source_url="https://example.com/pr/1",
+            type="github",
+            title="Review detected PR",
+            status="in_progress",
+            processing_state="ready",
+        )
+        session.add(task)
+        session.commit()
+        session.refresh(task)
+        task_id = task.id
+
+    response = app_harness.client.patch(
+        f"/v1/tasks/{task_id}",
+        headers=_headers(credential),
+        json={"title": "Manual edit should not apply"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
