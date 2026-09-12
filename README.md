@@ -32,6 +32,9 @@ manual task endpoints:
 
 The checked-in OpenAPI contract lives at `contracts/openapi.json`.
 
+Trigger.dev wrappers live in `trigger/` and execute Python job entry points in
+`backend/jobs/`. Configure `TRIGGER_PROJECT_REF` before running Trigger commands.
+
 ## Layout
 
 - `apps/extension/src/background/`: collection scheduling, API client, tab routing.
@@ -41,11 +44,11 @@ The checked-in OpenAPI contract lives at `contracts/openapi.json`.
 - `backend/app/auth/`: identity and owner-scoped authorization.
 - `backend/app/schemas/`: request, response, and observation schemas.
 - `backend/app/db/`: persistence and migrations.
-- `backend/app/detection/`: model-based task detection.
-- `backend/app/summarization/`: summary generation.
+- `backend/app/detection/`: model-output validation and task detection.
+- `backend/app/summarization/`: summary output validation and generation.
 - `backend/jobs/`: Python background-job entry points.
 - `contracts/`: shared OpenAPI and extension message contracts.
 - `trigger/`: TypeScript wrappers for Python jobs.
 - `tests/fixtures/`: sanitized API/page observations and expected outcomes.
 
-Extension and Trigger.dev integration are not implemented yet.
+Extension integration is not implemented yet.
