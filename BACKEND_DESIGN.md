@@ -164,6 +164,10 @@ Assign source revisions when accepting observations, before model calls. Seriali
 
 Persist accepted detection output before dispatching summaries. Retries resume pending summary dispatch even if detection already committed. Use task/revision idempotency keys and database uniqueness together. Every scan item reaches a terminal state, including superseded, no-task, insufficient-evidence, and failed items; scans must not spin forever.
 
+For MVP local development, the API may run deterministic heuristic detection and summarization inline immediately after accepting a scan. This keeps the sidebar populated from scanned tabs before hosted Trigger.dev dispatch and model-provider integration are complete. Inline work must use the same revision guards and idempotency semantics as queued jobs so the transition to external workers does not change task behavior.
+
+The local heuristic should create a generic `page` task card for scanned pages that do not match a specific supported task category. This gives users visibility into all readable scanned tabs while preserving stronger status labels for GitHub, research, email, travel, and shopping tasks when those are detected. Future model-backed no-task outcomes may still suppress cards when there is high confidence that a page is irrelevant.
+
 Proposed retry policy: three attempts with exponential backoff for transient provider/network failures, bounded model timeouts, and no retries for invalid input. Tune timeouts after measuring text and vision calls. References: [Trigger.dev idempotency](https://trigger.dev/docs/idempotency), [retries](https://trigger.dev/docs/errors-retrying).
 
 Deletion invalidates source revisions before cleanup so in-flight jobs cannot recreate deleted records from old observations. Respect site exclusions and clear pending local submissions when clearing data.
@@ -207,4 +211,4 @@ Evaluate model accuracy against sanitized fixtures rather than testing exact sum
 - Initial host-permission scope and automatic refresh frequency.
 - Text extraction thresholds and when to offer the optional screenshot fallback, based on evaluation.
 
-The primary collection approach is settled: page text + URL/title first. Backend foundation, manual task APIs, extension middle layer, scan ingestion, and automatic event-driven collection exist for the text-first path. Trigger.dev workflows, model-backed detection, summarization, image upload, and screenshot fallback remain to be implemented.
+The primary collection approach is settled: page text + URL/title first. Backend foundation, manual task APIs, extension middle layer, scan ingestion, automatic event-driven collection, generic scanned-page cards, local heuristic detection, and local heuristic summarization exist for the text-first path. Hosted Trigger.dev dispatch, model-provider integration, image upload, and screenshot fallback remain to be implemented.

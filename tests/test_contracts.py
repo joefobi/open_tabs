@@ -117,6 +117,7 @@ def test_extension_observation_flushes_are_single_flight() -> None:
     assert "void drainObservationFlush();" in source
     assert "void flushChangedObservations();" not in source
     assert ".then(() => orchestrator.retryPending())" not in source
+    assert 'case "LIST_TASKS":\n      scheduleObservationFlush();' in source
     assert "await retryPendingObservations();" in source
     assert "Unable to retry pending observations." in source
 

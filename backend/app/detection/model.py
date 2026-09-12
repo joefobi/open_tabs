@@ -2,10 +2,9 @@
 
 from dataclasses import dataclass
 from typing import Protocol
+from urllib.parse import urlsplit
 
 from backend.app.detection.schemas import (
-    DetectionInsufficientEvidenceResult,
-    DetectionNoTaskResult,
     DetectionResult,
     DetectionTaskResult,
     validate_detection_result,
@@ -70,20 +69,12 @@ class HeuristicDetectionClient:
         normalized = f"{observation.source_url} {observation.title} {observation.text}"
         normalized = normalized.lower()
 
-        if observation.extraction_state != ExtractionState.READY:
-            return DetectionInsufficientEvidenceResult(
-                result_type="insufficient_evidence",
-                reason="The page text was not available for analysis.",
+        if (
+            observation.extraction_state == ExtractionState.READY
+            and "github.com" in normalized
+            and any(
+                marker in normalized for marker in ("pull request", "review", "issue")
             )
-
-        if len(observation.text.strip()) < 20:
-            return DetectionInsufficientEvidenceResult(
-                result_type="insufficient_evidence",
-                reason="The captured page text is too short to identify a task.",
-            )
-
-        if "github.com" in normalized and any(
-            marker in normalized for marker in ("pull request", "review", "issue")
         ):
             return validate_detection_result(
                 {
@@ -96,7 +87,7 @@ class HeuristicDetectionClient:
                 }
             )
 
-        if any(
+        if observation.extraction_state == ExtractionState.READY and any(
             marker in normalized for marker in ("docs", "stackoverflow", "research")
         ):
             return validate_detection_result(
@@ -110,9 +101,15 @@ class HeuristicDetectionClient:
                 }
             )
 
-        return DetectionNoTaskResult(
-            result_type="no_task",
-            reason="The page content does not match a supported task category.",
+        return validate_detection_result(
+            {
+                "result_type": "task",
+                "task_type": TaskType.PAGE.value,
+                "title": _page_title(observation),
+                "status": TaskStatus.IN_PROGRESS.value,
+                "status_reason": _page_status_reason(observation),
+                "evidence": _page_evidence(observation),
+            }
         )
 
 
@@ -151,3 +148,66 @@ def _evidence(text: str) -> str:
     if len(stripped) <= 240:
         return stripped
     return f"{stripped[:237]}..."
+
+
+def _page_title(observation: ObservationContext) -> str:
+    """Return a bounded display title for a generic scanned page.
+
+    Args:
+        observation: Observation to title.
+
+    Returns:
+        A non-empty task card title for the scanned page.
+    """
+
+    title = observation.title.strip() or _hostname(observation.source_url)
+    if len(title) <= 200:
+        return title
+    return f"{title[:197]}..."
+
+
+def _page_status_reason(observation: ObservationContext) -> str:
+    """Describe generic scanned-page processing status.
+
+    Args:
+        observation: Observation being summarized.
+
+    Returns:
+        A short status reason for the sidebar card.
+    """
+
+    if observation.extraction_state != ExtractionState.READY:
+        return "The page was scanned, but readable text was not available."
+    if len(observation.text.strip()) < 20:
+        return "The page was scanned with limited readable text."
+    return "The page was scanned and added for review."
+
+
+def _page_evidence(observation: ObservationContext) -> str:
+    """Return bounded evidence for a generic scanned page.
+
+    Args:
+        observation: Observation being summarized.
+
+    Returns:
+        Evidence text or source URL for the sidebar card.
+    """
+
+    text = _evidence(observation.text)
+    if text:
+        return text
+    return observation.source_url
+
+
+def _hostname(source_url: str) -> str:
+    """Return a hostname fallback for a source URL.
+
+    Args:
+        source_url: URL captured by the extension.
+
+    Returns:
+        Hostname when available, otherwise the original URL.
+    """
+
+    parsed = urlsplit(source_url)
+    return parsed.netloc or source_url

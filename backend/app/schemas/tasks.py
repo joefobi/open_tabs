@@ -27,6 +27,7 @@ class TaskType(StrEnum):
     EMAIL = "email"
     TRAVEL = "travel"
     SHOPPING = "shopping"
+    PAGE = "page"
     MANUAL = "manual"
 
 

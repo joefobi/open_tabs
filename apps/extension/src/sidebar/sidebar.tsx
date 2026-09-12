@@ -94,6 +94,10 @@ export function Sidebar(): JSX.Element {
 
     {notice && <button className="notice" onClick={() => setNotice(null)}>{notice}</button>}
     <section className="task-list" aria-label="Detected tasks">
+      {snapshot.tasks.length === 0 && <div className="empty-state">
+        <h2>{snapshot.usingFallback ? "Preview unavailable" : "Analyzing open tabs"}</h2>
+        <p>{snapshot.usingFallback ? "Start the backend to load live task cards." : `${snapshot.tabCount} tabs observed. Task-like pages will appear here after processing.`}</p>
+      </div>}
       {snapshot.tasks.map((task) => <article className={`card elev-sm task-card ${task.origin === "manual" ? "task-card--manual" : ""}`} key={task.id}>
         <div className="task-top"><div><h2 className={task.status === "action_complete" ? "complete" : ""}>{task.title}</h2><p className="source-label">{task.origin === "manual" ? "Manually added" : new URL(task.sourceUrl ?? "https://opentabs.local").hostname}</p></div>
           {task.sourceUrl && <button className="btn btn-ghost btn-icon jump" aria-label={`Jump to ${task.title}`} onClick={() => void jumpToTask(task)}><ExternalIcon /></button>}

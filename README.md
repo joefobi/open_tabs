@@ -38,6 +38,15 @@ npm install
 npm run build
 ```
 
+If port 8000 is already in use, start the API on another loopback port and pass
+that URL into the extension build:
+
+```sh
+uv run uvicorn backend.app.main:app --host 127.0.0.1 --port 8001
+cd apps/extension
+VITE_OPEN_TABS_API_BASE_URL=http://127.0.0.1:8001 npm run build
+```
+
 Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**,
 then select:
 
@@ -128,9 +137,12 @@ The extension middle layer and scan ingestion routes are implemented for the
 text-first path, including automatic event-driven collection and single-flight
 background submission. The Vite-launched sidebar can connect directly to the
 local backend for development; the Chrome extension side panel connects through
-its service worker. Trigger.dev wrappers and Python job entry points are
-implemented for detection and summarization. Model-provider integration, image
-upload, and optional screenshot fallback are not implemented yet.
+its service worker. Accepted scan items run through local heuristic detection
+and summarization inline so scanned tabs appear in the sidebar, with
+task-specific labels when a supported activity is detected. Trigger.dev wrappers
+and Python job entry points are implemented for detection and summarization.
+Model-provider integration, image upload, and optional screenshot fallback are
+not implemented yet.
 
 Trigger.dev wrappers live in `trigger/` and execute Python job entry points in
 `backend/jobs/`. Configure `TRIGGER_PROJECT_REF` before running Trigger commands.
