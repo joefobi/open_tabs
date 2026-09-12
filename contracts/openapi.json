@@ -1,0 +1,381 @@
+{
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "additionalProperties": false,
+        "description": "Health check response.\n\nAttributes:\n    status: Service health marker.",
+        "properties": {
+          "status": {
+            "const": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "InstallationResponse": {
+        "additionalProperties": false,
+        "description": "Response returned when issuing an anonymous installation credential.\n\nAttributes:\n    owner_id: Owner identifier created for this installation.\n    installation_credential: Bearer credential shown once to the extension.\n    token_type: Credential type used in the Authorization header.",
+        "properties": {
+          "installation_credential": {
+            "title": "Installation Credential",
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "token_type": {
+            "const": "bearer",
+            "default": "bearer",
+            "title": "Token Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_id",
+          "installation_credential"
+        ],
+        "title": "InstallationResponse",
+        "type": "object"
+      },
+      "ProcessingState": {
+        "description": "Background processing state values.",
+        "enum": [
+          "queued",
+          "running",
+          "ready",
+          "failed"
+        ],
+        "title": "ProcessingState",
+        "type": "string"
+      },
+      "TaskCard": {
+        "additionalProperties": false,
+        "description": "Task card returned to the extension sidebar.\n\nAttributes:\n    id: Stable task identifier.\n    origin: Whether the task is detected or manual.\n    source_key: Nullable source key for detected tasks.\n    source_url: Nullable source URL used for return-to-tab behavior.\n    type: Supported task type.\n    title: User-visible task title.\n    status: User-visible task status.\n    status_reason: Optional status explanation.\n    summary: Optional grounded summary.\n    processing_state: Background processing state.\n    processing_error_code: Optional processing error code.\n    observed_at: Latest source observation time.\n    updated_at: Timestamp when the task last changed.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "observed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed At"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/TaskOrigin"
+          },
+          "processing_error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processing Error Code"
+          },
+          "processing_state": {
+            "$ref": "#/components/schemas/ProcessingState"
+          },
+          "source_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Key"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/TaskType"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "origin",
+          "source_key",
+          "source_url",
+          "type",
+          "title",
+          "status",
+          "status_reason",
+          "summary",
+          "processing_state",
+          "processing_error_code",
+          "observed_at",
+          "updated_at"
+        ],
+        "title": "TaskCard",
+        "type": "object"
+      },
+      "TaskListResponse": {
+        "additionalProperties": false,
+        "description": "Response containing owner-scoped task cards.\n\nAttributes:\n    tasks: Task cards visible to the authenticated owner.",
+        "properties": {
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/TaskCard"
+            },
+            "title": "Tasks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tasks"
+        ],
+        "title": "TaskListResponse",
+        "type": "object"
+      },
+      "TaskOrigin": {
+        "description": "Allowed task origin values.",
+        "enum": [
+          "detected",
+          "manual"
+        ],
+        "title": "TaskOrigin",
+        "type": "string"
+      },
+      "TaskStatus": {
+        "description": "User-visible task status values.",
+        "enum": [
+          "in_progress",
+          "needs_attention",
+          "action_complete",
+          "error"
+        ],
+        "title": "TaskStatus",
+        "type": "string"
+      },
+      "TaskType": {
+        "description": "Supported high-level task categories.",
+        "enum": [
+          "github",
+          "research",
+          "email",
+          "travel",
+          "shopping",
+          "manual"
+        ],
+        "title": "TaskType",
+        "type": "string"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Browser Task Sidebar API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/healthz": {
+      "get": {
+        "description": "Return a simple service health response.\n\nReturns:\n    A successful health response.",
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Healthz",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/installations": {
+      "post": {
+        "description": "Issue an anonymous installation credential.\n\nArgs:\n    session: Database session used to persist the owner.\n\nReturns:\n    The owner identifier and one-time bearer credential for the extension.",
+        "operationId": "create_installation_v1_installations_post",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Create Installation",
+        "tags": [
+          "installations"
+        ]
+      }
+    },
+    "/v1/tasks": {
+      "get": {
+        "description": "Return task cards visible to the authenticated owner.\n\nArgs:\n    owner: Authenticated owner resolved from bearer credentials.\n    session: Database session used to load tasks.\n\nReturns:\n    Owner-scoped task cards ordered by most recently updated first.",
+        "operationId": "list_tasks_v1_tasks_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Tasks",
+        "tags": [
+          "tasks"
+        ]
+      }
+    }
+  }
+}
