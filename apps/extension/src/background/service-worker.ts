@@ -132,7 +132,14 @@ async function drainObservationFlush(): Promise<void> {
 async function flushChangedObservations(): Promise<void> {
   try {
     await credentials.ensureCredential(apiClient);
-    await orchestrator.retryPending();
+  } catch (error: unknown) {
+    console.warn("Unable to prepare observation collection.", error);
+    return;
+  }
+
+  await retryPendingObservations();
+
+  try {
     await orchestrator.submitOpenTabObservations();
   } catch (error: unknown) {
     if (
@@ -143,6 +150,14 @@ async function flushChangedObservations(): Promise<void> {
       return;
     }
     console.warn("Unable to flush changed observations.", error);
+  }
+}
+
+async function retryPendingObservations(): Promise<void> {
+  try {
+    await orchestrator.retryPending();
+  } catch (error: unknown) {
+    console.warn("Unable to retry pending observations.", error);
   }
 }
 
