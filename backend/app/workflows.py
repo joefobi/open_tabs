@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import ValidationError
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from backend.app.db.models import Observation, Scan, ScanItem, Source, Task
@@ -95,7 +96,7 @@ def run_detection_job(
     scan.state = ProcessingState.RUNNING.value
     session.commit()
 
-    if _is_stale(source, observation):
+    if _is_stale_fresh(session, source, observation):
         return _complete_detection(
             session,
             item,
@@ -107,7 +108,10 @@ def run_detection_job(
 
     try:
         detection = client.detect(_observation_context(observation))
-    except (ModelCallError, ValidationError):
+    except ModelCallError:
+        session.rollback()
+        raise
+    except ValidationError:
         item.processing_state = ProcessingState.FAILED.value
         item.error_code = "detection_failed"
         _refresh_scan(session, scan)
@@ -121,6 +125,16 @@ def run_detection_job(
             error_code="detection_failed",
         )
 
+    if _is_stale_fresh(session, source, observation):
+        return _complete_detection(
+            session,
+            item,
+            scan,
+            outcome="superseded",
+            task=None,
+            observation=observation,
+        )
+
     if not isinstance(detection, DetectionTaskResult):
         return _complete_detection(
             session,
@@ -131,7 +145,7 @@ def run_detection_job(
             observation=observation,
         )
 
-    if _is_stale(source, observation):
+    if _is_stale_fresh(session, source, observation):
         return _complete_detection(
             session,
             item,
@@ -189,6 +203,8 @@ def run_summary_job(
     item = _scan_item_for_summary(session, task_id, observation_id)
     scan = _require_scan(session, UUID(item.scan_id)) if item is not None else None
 
+    session.refresh(task)
+    session.refresh(source)
     if (
         _is_stale(source, observation)
         or task.detection_revision != observation.revision
@@ -207,6 +223,8 @@ def run_summary_job(
             error_code=None,
         )
 
+    previous_task_state = task.processing_state
+    previous_task_error_code = task.processing_error_code
     task.processing_state = ProcessingState.RUNNING.value
     if item is not None:
         item.processing_state = ProcessingState.RUNNING.value
@@ -216,7 +234,10 @@ def run_summary_job(
 
     try:
         summary = client.summarize(_summary_context(task, observation))
-    except (SummaryModelCallError, ValidationError):
+    except SummaryModelCallError:
+        session.rollback()
+        raise
+    except ValidationError:
         task.processing_state = ProcessingState.FAILED.value
         task.processing_error_code = "summary_failed"
         if item is not None:
@@ -232,10 +253,15 @@ def run_summary_job(
             error_code="summary_failed",
         )
 
+    session.refresh(task)
+    session.refresh(source)
     if (
         _is_stale(source, observation)
         or task.detection_revision != observation.revision
     ):
+        if task.detection_revision == observation.revision:
+            task.processing_state = previous_task_state
+            task.processing_error_code = previous_task_error_code
         if item is not None:
             item.processing_state = ProcessingState.READY.value
             item.detection_outcome = "superseded"
@@ -410,6 +436,29 @@ def _is_stale(source: Source, observation: Observation) -> bool:
         source.latest_observation_id != observation.id
         or source.latest_revision != observation.revision
     )
+
+
+def _is_stale_fresh(
+    session: Session,
+    source: Source,
+    observation: Observation,
+) -> bool:
+    """Return whether an observation is stale after refreshing source state.
+
+    Args:
+        session: Database session that may contain stale ORM rows.
+        source: Source that owns the observation.
+        observation: Observation being processed.
+
+    Returns:
+        True when a newer observation superseded this one.
+    """
+
+    try:
+        session.refresh(source)
+    except SQLAlchemyError:
+        return True
+    return _is_stale(source, observation)
 
 
 def _observation_context(observation: Observation) -> ObservationContext:
