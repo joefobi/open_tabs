@@ -28,6 +28,8 @@ The Python backend currently exposes anonymous installation onboarding,
 structured error responses, and owner-scoped manual task endpoints:
 
 - `POST /v1/installations`
+- `POST /v1/scans`
+- `GET /v1/scans/{scan_id}`
 - `GET /v1/tasks`
 - `POST /v1/tasks`
 - `PATCH /v1/tasks/{task_id}`
@@ -46,9 +48,9 @@ Tests cover the anonymous identity boundary, manual task lifecycle, idempotent
 manual creation, validation errors, owner isolation, clear-data behavior, and
 OpenAPI contract freshness.
 
-The extension middle layer, scan ingestion routes, Trigger.dev workflows,
-model-backed detection, summarization, image upload, and optional screenshot
-fallback are not implemented yet.
+The extension middle layer and scan ingestion routes are implemented for the
+text-first path. Trigger.dev workflows, model-backed detection, summarization,
+image upload, and optional screenshot fallback are not implemented yet.
 
 ## Layout
 
