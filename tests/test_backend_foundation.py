@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.auth.anonymous import hash_installation_credential
-from backend.app.db.models import Owner, Task
+from backend.app.db.models import Base, Owner, Task
 from backend.app.db.session import Database
 from backend.app.main import create_app
 
@@ -127,6 +127,42 @@ def test_list_tasks_requires_installation_credential(
     }
 
 
+@pytest.mark.parametrize(
+    ("authorization", "message"),
+    [
+        ("not-a-bearer-token", "Invalid anonymous installation credentials."),
+        ("Bearer unknown-token", "Invalid anonymous installation credentials."),
+    ],
+)
+def test_list_tasks_rejects_invalid_installation_credentials(
+    app_harness: AppHarness,
+    authorization: str,
+    message: str,
+) -> None:
+    """Verify task listing rejects malformed and unknown bearer credentials.
+
+    Args:
+        app_harness: API test harness.
+        authorization: Authorization header value to send.
+        message: Expected response error message.
+    """
+
+    response = app_harness.client.get(
+        "/v1/tasks",
+        headers={"Authorization": authorization},
+    )
+    body = _json_body(response.json())
+
+    assert response.status_code == 401
+    assert body == {
+        "error": {
+            "code": "unauthorized",
+            "message": message,
+            "retryable": False,
+        }
+    }
+
+
 def test_list_tasks_returns_empty_owner_scoped_response(
     app_harness: AppHarness,
 ) -> None:
@@ -189,3 +225,17 @@ def test_list_tasks_is_scoped_to_authenticated_owner(
     assert len(body["tasks"]) == 1
     task = cast(dict[str, Any], body["tasks"][0])
     assert task["title"] == "Visible manual task"
+
+
+def test_model_metadata_includes_foundation_tables() -> None:
+    """Verify the ORM metadata contains the foundation persistence tables."""
+
+    assert set(Base.metadata.tables) == {
+        "images",
+        "observations",
+        "owners",
+        "scan_items",
+        "scans",
+        "sources",
+        "tasks",
+    }
