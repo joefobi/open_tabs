@@ -7,14 +7,6 @@
       "type": "object",
       "required": ["type"],
       "properties": {
-        "type": { "const": "SCAN_NOW" }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": ["type"],
-      "properties": {
         "type": { "const": "LIST_TASKS" }
       },
       "additionalProperties": false

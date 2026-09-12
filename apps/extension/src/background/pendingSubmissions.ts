@@ -1,7 +1,12 @@
 /** Persist scan submissions before network dispatch. */
 
 import { readStorageValue, writeStorageValue } from "./storage";
-import type { PendingScan, ScanAcceptedResponse, ScanCreateRequest } from "./types";
+import type {
+  ObservationFingerprint,
+  PendingScan,
+  ScanAcceptedResponse,
+  ScanCreateRequest,
+} from "./types";
 
 const PENDING_SCANS_KEY = "palenque.pendingScans";
 
@@ -10,7 +15,17 @@ export class PendingSubmissionStore {
     return (await readStorageValue<PendingScan[]>(PENDING_SCANS_KEY)) ?? [];
   }
 
-  async upsertPending(body: ScanCreateRequest): Promise<PendingScan> {
+  async listPendingObservationFingerprints(): Promise<ObservationFingerprint[]> {
+    const scans = await this.list();
+    return scans
+      .filter((scan) => scan.state === "pending")
+      .flatMap((scan) => scan.observationFingerprints ?? []);
+  }
+
+  async upsertPending(
+    body: ScanCreateRequest,
+    observationFingerprints: ObservationFingerprint[] = [],
+  ): Promise<PendingScan> {
     const scans = await this.list();
     const existing = scans.find((scan) => scan.clientRequestId === body.client_request_id);
     const pending: PendingScan = existing ?? {
@@ -20,6 +35,7 @@ export class PendingSubmissionStore {
       state: "pending",
     };
     pending.body = body;
+    pending.observationFingerprints = observationFingerprints;
     pending.state = "pending";
     await this.write(scans.filter((scan) => scan.clientRequestId !== pending.clientRequestId).concat(pending));
     return pending;

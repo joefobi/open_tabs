@@ -48,10 +48,18 @@ Tests cover the anonymous identity boundary, manual task lifecycle, idempotent
 manual creation, validation errors, owner isolation, clear-data behavior, and
 OpenAPI contract freshness.
 
+The intended extension collection model is automatic page-text observation from
+permitted HTTP(S) pages as the user visits, activates, or navigates tabs. The
+service worker flushes changed observations to the backend as internal scan
+batches, using persisted content fingerprints to avoid resubmitting unchanged
+pages. Screenshots are not automatic or periodic; optional screenshot fallback
+should only happen after a user action for the active visible page.
+
 The extension middle layer and scan ingestion routes are implemented for the
-text-first path. Trigger.dev wrappers and Python job entry points are implemented
-for detection and summarization. Model-provider integration, image upload, and
-optional screenshot fallback are not implemented yet.
+text-first path, including automatic event-driven collection and single-flight
+background submission. Trigger.dev wrappers and Python job entry points are
+implemented for detection and summarization. Model-provider integration, image
+upload, and optional screenshot fallback are not implemented yet.
 
 Trigger.dev wrappers live in `trigger/` and execute Python job entry points in
 `backend/jobs/`. Configure `TRIGGER_PROJECT_REF` before running Trigger commands.

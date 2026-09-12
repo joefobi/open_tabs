@@ -133,12 +133,19 @@ export interface CollectedPage {
   errorCode?: string;
 }
 
+export interface ObservationFingerprint {
+  sourceKey: string;
+  contentHash: string;
+  submittedAt?: string;
+}
+
 export interface PendingScan {
   clientRequestId: string;
   body: ScanCreateRequest;
   createdAt: string;
   lastAttemptAt?: string;
   scanId?: string;
+  observationFingerprints?: ObservationFingerprint[];
   state: "pending" | "submitted";
 }
 
@@ -156,8 +163,20 @@ export interface ChromeStorageArea {
   remove(keys: string | string[], callback?: () => void): void;
 }
 
+export interface ChromeEvent<TCallback> {
+  addListener(callback: TCallback): void;
+}
+
 export interface ChromeApi {
+  alarms?: {
+    create(
+      name: string,
+      alarmInfo: { delayInMinutes?: number; periodInMinutes?: number },
+    ): void;
+    onAlarm: ChromeEvent<(alarm: { name: string }) => void>;
+  };
   runtime: {
+    onInstalled?: ChromeEvent<() => void>;
     onMessage: {
       addListener(
         callback: (
@@ -167,6 +186,7 @@ export interface ChromeApi {
         ) => boolean | void,
       ): void;
     };
+    onStartup?: ChromeEvent<() => void>;
   };
   scripting: {
     executeScript<T>(details: {
@@ -180,6 +200,16 @@ export interface ChromeApi {
   tabs: {
     create(createProperties: Record<string, unknown>): Promise<ChromeTab>;
     get(tabId: number): Promise<ChromeTab>;
+    onActivated?: ChromeEvent<
+      (activeInfo: { tabId: number; windowId: number }) => void
+    >;
+    onUpdated?: ChromeEvent<
+      (
+        tabId: number,
+        changeInfo: { status?: string; url?: string },
+        tab: ChromeTab,
+      ) => void
+    >;
     query(queryInfo: Record<string, unknown>): Promise<ChromeTab[]>;
     update(tabId: number, updateProperties: Record<string, unknown>): Promise<ChromeTab>;
   };
@@ -189,7 +219,6 @@ export interface ChromeApi {
 }
 
 export type ExtensionMessage =
-  | { type: "SCAN_NOW" }
   | { type: "GET_SCAN"; scanId: string }
   | { type: "LIST_TASKS" }
   | { type: "ADD_MANUAL_TASK"; clientRequestId: string; title: string }
