@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from backend.app.auth.anonymous import hash_installation_credential
 from backend.app.db.models import Image, Owner, Scan, Source, Task
@@ -368,8 +368,10 @@ def test_clear_data_removes_retained_owner_records(
             installation_credential_hash=hash_installation_credential(other_credential)
         )
         assert owner is not None
+        owner_id = owner.id
         session.add(other_owner)
         session.flush()
+        other_owner_id = other_owner.id
         session.add_all(
             [
                 Source(owner_id=owner.id, source_key="https://example.com/owner"),
@@ -424,10 +426,20 @@ def test_clear_data_removes_retained_owner_records(
     assert cleared.json() == {"deleted_tasks": 1}
 
     with app_harness.database.session_factory() as session:
-        assert session.scalar(select(func.count()).select_from(Source)) == 1
-        assert session.scalar(select(func.count()).select_from(Scan)) == 1
-        assert session.scalar(select(func.count()).select_from(Image)) == 1
-        assert session.scalar(select(func.count()).select_from(Task)) == 1
+        remaining_source = session.scalars(select(Source)).one()
+        remaining_scan = session.scalars(select(Scan)).one()
+        remaining_image = session.scalars(select(Image)).one()
+        remaining_task = session.scalars(select(Task)).one()
+
+        assert remaining_source.owner_id == other_owner_id
+        assert remaining_source.source_key == "https://example.com/other"
+        assert remaining_scan.owner_id == other_owner_id
+        assert remaining_scan.client_request_id == "other-scan"
+        assert remaining_image.owner_id == other_owner_id
+        assert remaining_image.storage_key == "other-image"
+        assert remaining_task.owner_id == other_owner_id
+        assert remaining_task.title == "Other task"
+        assert owner_id != other_owner_id
 
 
 def test_empty_patch_is_rejected(app_harness: AppHarness) -> None:
