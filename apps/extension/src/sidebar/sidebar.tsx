@@ -93,7 +93,10 @@ export function Sidebar(): JSX.Element {
 
   const refresh = useCallback(async () => {
     try { setSnapshot(await getSnapshot()); }
-    catch { setNotice("Showing reliable demo tasks while the API reconnects."); }
+    catch {
+      setSnapshot({ ...browserPreview, tasks: [...browserPreview.tasks] });
+      setNotice("Showing reliable demo tasks while the API reconnects.");
+    }
   }, []);
 
   useEffect(() => { void refresh(); const timer = window.setInterval(() => void refresh(), 2000); return () => window.clearInterval(timer); }, [refresh]);
