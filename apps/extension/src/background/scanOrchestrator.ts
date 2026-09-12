@@ -37,7 +37,11 @@ export class ScanOrchestrator {
       );
     }
 
-    const changedPages = await this.observationStateStore.filterChanged(pages);
+    const pendingFingerprints = await this.pendingStore.listPendingObservationFingerprints();
+    const changedPages = await this.observationStateStore.filterChanged(
+      pages,
+      pendingFingerprints,
+    );
     if (changedPages.length === 0) {
       throw new ExtensionRuntimeError(
         "no_changed_observations",

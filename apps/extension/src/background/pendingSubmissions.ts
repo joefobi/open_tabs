@@ -15,6 +15,13 @@ export class PendingSubmissionStore {
     return (await readStorageValue<PendingScan[]>(PENDING_SCANS_KEY)) ?? [];
   }
 
+  async listPendingObservationFingerprints(): Promise<ObservationFingerprint[]> {
+    const scans = await this.list();
+    return scans
+      .filter((scan) => scan.state === "pending")
+      .flatMap((scan) => scan.observationFingerprints ?? []);
+  }
+
   async upsertPending(
     body: ScanCreateRequest,
     observationFingerprints: ObservationFingerprint[] = [],

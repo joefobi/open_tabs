@@ -7,14 +7,21 @@ const SUBMITTED_OBSERVATIONS_KEY = "palenque.submittedObservations";
 const MAX_SUBMITTED_OBSERVATIONS = 500;
 
 export class ObservationStateStore {
-  async filterChanged(pages: CollectedPage[]): Promise<CollectedPage[]> {
+  async filterChanged(
+    pages: CollectedPage[],
+    queuedFingerprints: ObservationFingerprint[] = [],
+  ): Promise<CollectedPage[]> {
     const submitted = await this.list();
     const submittedBySource = new Map(
       submitted.map((item) => [item.sourceKey, item.contentHash]),
     );
+    const queuedKeys = new Set(queuedFingerprints.map(fingerprintKey));
     return pages.filter((page) => {
       const fingerprint = toObservationFingerprint(page);
-      return submittedBySource.get(fingerprint.sourceKey) !== fingerprint.contentHash;
+      return (
+        submittedBySource.get(fingerprint.sourceKey) !== fingerprint.contentHash &&
+        !queuedKeys.has(fingerprintKey(fingerprint))
+      );
     });
   }
 
@@ -65,4 +72,8 @@ function sourceKeyForUrl(url: string): string {
   } catch {
     return url.trim();
   }
+}
+
+function fingerprintKey(fingerprint: ObservationFingerprint): string {
+  return `${fingerprint.sourceKey}\n${fingerprint.contentHash}`;
 }

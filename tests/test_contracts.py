@@ -118,8 +118,11 @@ def test_extension_submits_only_changed_observations() -> None:
         "apps/extension/src/background/observationState.ts",
     ).read_text()
 
-    assert "filterChanged(pages)" in orchestrator
+    assert "filterChanged(" in orchestrator
+    assert "pendingFingerprints" in orchestrator
+    assert "listPendingObservationFingerprints()" in orchestrator
     assert "no_changed_observations" in orchestrator
     assert "markSubmittedPages(changedPages)" in orchestrator
     assert "palenque.submittedObservations" in observation_state
+    assert "queuedFingerprints" in observation_state
     assert "sourceKeyForUrl" in observation_state
