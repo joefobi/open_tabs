@@ -13,7 +13,7 @@ Confirmed decisions:
 - Anyone should be able to install and start using the extension through self-service onboarding.
 - Tasks have In Progress, Needs Attention, Action Complete, or Error status. Needs Attention alone is sufficient; intervention buttons are deferred.
 - Manual task addition, expandable summaries, and return-to-tab navigation are included. The app observes and summarizes; it does not execute actions.
-- The MVP does not include a user-facing Scan Now button. The extension observes permitted pages as the user visits and uses them, then submits changed page observations in the background.
+- The extension observes permitted pages as the user visits and uses them, then submits changed page observations in the background.
 
 The backend engineer owns the extension middle layer, including tab scanning, content extraction, service worker orchestration, API calls, credential storage, tab routing, optional screenshot capture, and scan persistence. The backend engineer also owns the Python API, persistence, model calls, Trigger.dev workflows, and anonymous installation identity boundary. Evelyn owns the sidebar UI and task cards. Framework, database hosting, and model provider remain proposals.
 
@@ -55,9 +55,9 @@ Proposed limits: 12,000 text characters per page, 20 observations per batch, and
 
 Use URL/title alone for a broad hint if extraction fails, but do not infer detailed progress from metadata. Inaccessible, unloaded, frame-isolated, and visually rendered pages may yield little text. Generic extraction expands coverage without guaranteeing support for every website.
 
-Do not expose a Scan Now button in the MVP. Collect page text opportunistically after navigation, tab activation, and meaningful content changes, with a low-frequency periodic refresh for active/open permitted pages. Proposed content-change debounce: two seconds. Proposed periodic refresh: every five minutes while the browser is active, with measurement before increasing frequency. Hash normalized content plus URL/title to skip unchanged observations. Persist pending submissions and cached cards in extension storage so worker restarts do not lose them. Reference: [Chrome service worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle).
+Collect page text opportunistically after navigation, tab activation, and meaningful content changes, with a low-frequency periodic refresh for active/open permitted pages. Proposed content-change debounce: two seconds. Proposed periodic refresh: every five minutes while the browser is active, with measurement before increasing frequency. Hash normalized content plus URL/title to skip unchanged observations. Persist pending submissions and cached cards in extension storage so worker restarts do not lose them. Reference: [Chrome service worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle).
 
-A backend `Scan` is still useful, but it is not a user-facing action. Treat it as an idempotent ingestion batch created by the service worker when it flushes one or more changed observations. The sidebar should display task freshness, processing state, and collection gaps rather than a scan button or scan-centric workflow.
+A backend `Scan` is an idempotent ingestion batch created by the service worker when it flushes one or more changed observations. The sidebar should display task freshness, processing state, and collection gaps rather than a scan-centric workflow.
 
 ## 4. Optional screenshot fallback
 
