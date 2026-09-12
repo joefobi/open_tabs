@@ -29,6 +29,8 @@ def test_openapi_contract_contains_foundation_endpoints() -> None:
 
     paths = cast(dict[str, Any], _contract_schema()["paths"])
 
+    assert "/v1/data" in paths
     assert "/healthz" in paths
     assert "/v1/installations" in paths
     assert "/v1/tasks" in paths
+    assert "/v1/tasks/{task_id}" in paths
