@@ -49,8 +49,12 @@ manual creation, validation errors, owner isolation, clear-data behavior, and
 OpenAPI contract freshness.
 
 The extension middle layer and scan ingestion routes are implemented for the
-text-first path. Trigger.dev workflows, model-backed detection, summarization,
-image upload, and optional screenshot fallback are not implemented yet.
+text-first path. Trigger.dev wrappers and Python job entry points are implemented
+for detection and summarization. Model-provider integration, image upload, and
+optional screenshot fallback are not implemented yet.
+
+Trigger.dev wrappers live in `trigger/` and execute Python job entry points in
+`backend/jobs/`. Configure `TRIGGER_PROJECT_REF` before running Trigger commands.
 
 ## Layout
 
@@ -61,8 +65,8 @@ image upload, and optional screenshot fallback are not implemented yet.
 - `backend/app/auth/`: identity and owner-scoped authorization.
 - `backend/app/schemas/`: request, response, and observation schemas.
 - `backend/app/db/`: persistence and migrations.
-- `backend/app/detection/`: model-based task detection.
-- `backend/app/summarization/`: summary generation.
+- `backend/app/detection/`: model-output validation and task detection.
+- `backend/app/summarization/`: summary output validation and generation.
 - `backend/jobs/`: Python background-job entry points.
 - `contracts/`: shared OpenAPI and extension message contracts.
 - `trigger/`: TypeScript wrappers for Python jobs.
