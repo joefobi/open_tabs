@@ -66,7 +66,9 @@ CREATE TABLE tasks (
   observed_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (owner_id, source_key)
+  client_request_id TEXT,
+  UNIQUE (owner_id, source_key),
+  UNIQUE (owner_id, client_request_id)
 );
 
 CREATE TABLE scans (

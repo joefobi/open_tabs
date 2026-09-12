@@ -1,6 +1,21 @@
 {
   "components": {
     "schemas": {
+      "ClearDataResponse": {
+        "additionalProperties": false,
+        "description": "Response returned after clearing owner-scoped data.\n\nAttributes:\n    deleted_tasks: Number of task rows deleted.",
+        "properties": {
+          "deleted_tasks": {
+            "title": "Deleted Tasks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deleted_tasks"
+        ],
+        "title": "ClearDataResponse",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -55,6 +70,83 @@
           "installation_credential"
         ],
         "title": "InstallationResponse",
+        "type": "object"
+      },
+      "ManualTaskCreateRequest": {
+        "additionalProperties": false,
+        "description": "Request to create a manual task with an owner-scoped idempotency key.\n\nAttributes:\n    client_request_id: Client-generated idempotency key.\n    title: User-visible manual task title.",
+        "example": {
+          "client_request_id": "sidebar-manual-001",
+          "title": "Review Yokohama tabs before standup"
+        },
+        "properties": {
+          "client_request_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Client Request Id",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_request_id",
+          "title"
+        ],
+        "title": "ManualTaskCreateRequest",
+        "type": "object"
+      },
+      "ManualTaskPatchRequest": {
+        "additionalProperties": false,
+        "description": "Request to patch mutable fields on a manual task.\n\nAttributes:\n    title: Optional replacement title.\n    status: Optional replacement task status.\n    status_reason: Optional replacement or explicit null status reason.",
+        "example": {
+          "status": "action_complete",
+          "status_reason": "Marked complete by the user.",
+          "title": "Review Yokohama tabs after lunch"
+        },
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "ManualTaskPatchRequest",
         "type": "object"
       },
       "ProcessingState": {
@@ -305,6 +397,56 @@
         ]
       }
     },
+    "/v1/data": {
+      "delete": {
+        "description": "Delete retained task, scan, source, observation, and image data.\n\nArgs:\n    owner: Authenticated owner resolved from bearer credentials.\n    session: Database session used to delete owner-scoped records.\n\nReturns:\n    Counts for deleted owner-scoped task records.",
+        "operationId": "clear_data_v1_data_delete",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearDataResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clear Data",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
     "/v1/installations": {
       "post": {
         "description": "Issue an anonymous installation credential.\n\nArgs:\n    session: Database session used to persist the owner.\n\nReturns:\n    The owner identifier and one-time bearer credential for the extension.",
@@ -372,6 +514,185 @@
           }
         },
         "summary": "List Tasks",
+        "tags": [
+          "tasks"
+        ]
+      },
+      "post": {
+        "description": "Create an idempotent manual task for the authenticated owner.\n\nArgs:\n    request: Manual task payload with client idempotency key.\n    owner: Authenticated owner resolved from bearer credentials.\n    session: Database session used to create or load the task.\n\nReturns:\n    Created or replayed manual task card.",
+        "operationId": "create_manual_task_v1_tasks_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualTaskCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskCard"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Manual Task",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/v1/tasks/{task_id}": {
+      "delete": {
+        "description": "Delete one task owned by the authenticated owner.\n\nArgs:\n    task_id: Task identifier from the URL.\n    owner: Authenticated owner resolved from bearer credentials.\n    session: Database session used to delete the task.\n\nReturns:\n    Empty 204 response when deletion succeeds.\n\nRaises:\n    HTTPException: Raised with 404 when the task is absent for this owner.",
+        "operationId": "delete_task_v1_tasks__task_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Task",
+        "tags": [
+          "tasks"
+        ]
+      },
+      "patch": {
+        "description": "Patch a manual task owned by the authenticated owner.\n\nArgs:\n    task_id: Task identifier from the URL.\n    request: Mutable manual task fields to update.\n    owner: Authenticated owner resolved from bearer credentials.\n    session: Database session used to update the task.\n\nReturns:\n    Updated manual task card.\n\nRaises:\n    HTTPException: Raised with 400 for empty patches or 404 for absent tasks.",
+        "operationId": "update_manual_task_v1_tasks__task_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualTaskPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskCard"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Manual Task",
         "tags": [
           "tasks"
         ]

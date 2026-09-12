@@ -167,11 +167,15 @@ class Task(Base):
         observed_at: Latest source observation time.
         updated_at: Timestamp when the task last changed.
         created_at: Timestamp when the task was created.
+        client_request_id: Owner-scoped idempotency key for manual tasks.
         owner: Owning installation.
     """
 
     __tablename__ = "tasks"
-    __table_args__ = (UniqueConstraint("owner_id", "source_key"),)
+    __table_args__ = (
+        UniqueConstraint("owner_id", "source_key"),
+        UniqueConstraint("owner_id", "client_request_id"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_make_uuid)
     owner_id: Mapped[str] = mapped_column(ForeignKey("owners.id"), nullable=False)
@@ -194,6 +198,7 @@ class Task(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utc_now, nullable=False
     )
+    client_request_id: Mapped[str | None] = mapped_column(String(128))
 
     owner: Mapped[Owner] = relationship(back_populates="tasks")
 
