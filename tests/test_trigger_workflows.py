@@ -11,7 +11,11 @@ from sqlalchemy.orm import Session
 from backend.app.db.models import Observation, Owner, Scan, ScanItem, Source, Task
 from backend.app.db.session import Database
 from backend.app.detection.model import ModelCallError, ObservationContext
-from backend.app.detection.schemas import DetectionResult, DetectionTaskResult
+from backend.app.detection.schemas import (
+    DetectionNoTaskResult,
+    DetectionResult,
+    DetectionTaskResult,
+)
 from backend.app.schemas.observations import ExtractionState
 from backend.app.schemas.tasks import ProcessingState, TaskStatus, TaskType
 from backend.app.summarization.model import SummaryContext, SummaryModelCallError
@@ -52,6 +56,25 @@ class FailingDetectionClient:
         """
 
         raise ModelCallError("provider timed out")
+
+
+class NoTaskDetectionClient:
+    """Detection client that returns an explicit no-task outcome."""
+
+    def detect(self, observation: ObservationContext) -> DetectionResult:
+        """Return a no-task result for workflow behavior tests.
+
+        Args:
+            observation: Observation context that would be sent to the provider.
+
+        Returns:
+            A validated no-task detection result.
+        """
+
+        return DetectionNoTaskResult(
+            result_type="no_task",
+            reason=f"No task is needed for {observation.title}.",
+        )
 
 
 class FailingSummaryClient:
@@ -298,8 +321,8 @@ def test_detection_and_summary_create_ready_task(database: Database) -> None:
         assert scan.completed_count == 1
 
 
-def test_detection_records_no_task_without_creating_card(database: Database) -> None:
-    """Complete a no-task scan item without creating a task card."""
+def test_heuristic_detection_creates_generic_page_card(database: Database) -> None:
+    """Create a generic page card when a readable page has no task markers."""
 
     with database.session_factory() as session:
         rows = _create_scan_item(
@@ -310,6 +333,33 @@ def test_detection_records_no_task_without_creating_card(database: Database) -> 
         )
 
         detection = run_detection_job(session, rows.scan_item_id)
+
+        assert detection.outcome == "task"
+        assert detection.task_id is not None
+        task = session.get(Task, str(detection.task_id))
+        assert task is not None
+        assert task.type == TaskType.PAGE.value
+        assert task.title == "Sourdough notes"
+
+
+def test_detection_records_explicit_no_task_without_creating_card(
+    database: Database,
+) -> None:
+    """Complete an explicit no-task scan item without creating a task card."""
+
+    with database.session_factory() as session:
+        rows = _create_scan_item(
+            session,
+            source_url="https://example.com/recipe",
+            title="Sourdough notes",
+            text="This article explains a neutral recipe with no supported task context.",
+        )
+
+        detection = run_detection_job(
+            session,
+            rows.scan_item_id,
+            detection_client=NoTaskDetectionClient(),
+        )
 
         assert detection.outcome == "no_task"
         assert detection.task_id is None

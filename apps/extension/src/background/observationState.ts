@@ -3,7 +3,7 @@
 import { readStorageValue, writeStorageValue } from "./storage";
 import type { CollectedPage, ObservationFingerprint } from "./types";
 
-const SUBMITTED_OBSERVATIONS_KEY = "palenque.submittedObservations";
+const SUBMITTED_OBSERVATIONS_KEY = "palenque.submittedObservations.v2";
 const MAX_SUBMITTED_OBSERVATIONS = 500;
 
 export class ObservationStateStore {
