@@ -28,7 +28,9 @@ let observationFlushInFlight = false;
 let observationFlushRequested = false;
 
 chrome.action.onClicked.addListener((tab) => {
-  void openSidePanel(tab);
+  void openSidePanel(tab).catch((error: unknown) =>
+    console.warn("Unable to open the OpenTabs side panel.", error),
+  );
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -43,8 +45,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true;
 });
 
+configureSidePanel();
 registerObservationTriggers();
-void chrome.sidePanel.setPanelBehavior?.({ openPanelOnActionClick: true });
 
 void credentials
   .ensureCredential(apiClient)
@@ -62,6 +64,24 @@ async function openSidePanel(tab: { id?: number; windowId?: number }): Promise<v
   if (tab.id !== undefined) {
     await chrome.sidePanel.open({ tabId: tab.id });
   }
+}
+
+function configureSidePanel(): void {
+  // Enable the side panel and let Chrome open it from the toolbar action.
+  const optionsPromise = chrome.sidePanel.setOptions?.({
+    path: "index.html",
+    enabled: true,
+  });
+  void optionsPromise?.catch((error: unknown) =>
+    console.warn("Unable to enable the OpenTabs side panel.", error),
+  );
+
+  const behaviorPromise = chrome.sidePanel.setPanelBehavior?.({
+    openPanelOnActionClick: true,
+  });
+  void behaviorPromise?.catch((error: unknown) =>
+    console.warn("Unable to configure the OpenTabs toolbar action.", error),
+  );
 }
 
 async function handleMessage(message: ExtensionMessage): Promise<unknown> {

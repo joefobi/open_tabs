@@ -195,6 +195,7 @@ export interface ChromeApi {
   };
   sidePanel: {
     open(options: { tabId?: number; windowId?: number }): Promise<void>;
+    setOptions?(options: { path: string; enabled: boolean }): Promise<void>;
     setPanelBehavior?(behavior: { openPanelOnActionClick: boolean }): Promise<void>;
   };
   scripting: {

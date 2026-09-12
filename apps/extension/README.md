@@ -13,6 +13,11 @@ npm run build
 Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**,
 then select `apps/extension/dist`.
 
+After rebuilding, click the reload icon on the `OpenTabs AI` extension card. Open
+the side panel from the pinned toolbar icon or from Chrome's Extensions menu;
+clicking the logo on the `chrome://extensions` card itself does not launch the
+extension UI.
+
 The sidebar stores pre-seeded demo tasks locally so it stays useful when backend
 jobs are unavailable. The service worker also detects the PRD's URL-first GitHub,
 research, Gmail, travel, and cart signals, with developer-task signals checked first.
