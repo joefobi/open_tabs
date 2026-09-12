@@ -8,18 +8,22 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from backend.app.config import Settings, get_settings
 from backend.app.db.models import Observation, Scan, ScanItem, Source, Task
 from backend.app.detection.model import (
     DetectionModelClient,
     HeuristicDetectionClient,
     ModelCallError,
     ObservationContext,
+    OpenAIDetectionClient,
 )
 from backend.app.detection.schemas import DetectionTaskResult
+from backend.app.openai_provider import OpenAIResponsesClient
 from backend.app.schemas.observations import ExtractionState
 from backend.app.schemas.tasks import ProcessingState, TaskOrigin
 from backend.app.summarization.model import (
     HeuristicSummaryClient,
+    OpenAISummaryClient,
     SummaryContext,
     SummaryModelCallError,
     SummaryModelClient,
@@ -86,7 +90,7 @@ def run_detection_job(
         ValueError: Raised when the scan item or observation cannot be found.
     """
 
-    client = detection_client or HeuristicDetectionClient()
+    client = detection_client or _default_detection_client(get_settings())
     item = _require_scan_item(session, scan_item_id)
     observation = _require_observation(session, UUID(item.observation_id))
     source = _require_source(session, UUID(observation.source_id))
@@ -196,7 +200,7 @@ def run_summary_job(
         ValueError: Raised when required task or observation rows are missing.
     """
 
-    client = summary_client or HeuristicSummaryClient()
+    client = summary_client or _default_summary_client(get_settings())
     task = _require_task(session, task_id)
     observation = _require_observation(session, observation_id)
     source = _require_source(session, UUID(observation.source_id))
@@ -332,6 +336,83 @@ def _complete_detection(
         observation_id=UUID(observation.id),
         processing_state=ProcessingState.READY,
         error_code=None,
+    )
+
+
+def _default_detection_client(settings: Settings) -> DetectionModelClient:
+    """Return the configured detection client.
+
+    Args:
+        settings: Runtime settings used to choose the provider.
+
+    Returns:
+        OpenAI-backed or heuristic detection client.
+    """
+
+    if settings.model_provider == "openai":
+        api_key = _openai_api_key(settings)
+        if api_key is None:
+            raise ModelCallError(
+                "OPEN_TABS_MODEL_PROVIDER=openai requires OPENAI_API_KEY "
+                "or OPEN_TABS_OPENAI_API_KEY.",
+            )
+        return OpenAIDetectionClient(_openai_responses_client(settings, api_key))
+    return HeuristicDetectionClient()
+
+
+def _default_summary_client(settings: Settings) -> SummaryModelClient:
+    """Return the configured summary client.
+
+    Args:
+        settings: Runtime settings used to choose the provider.
+
+    Returns:
+        OpenAI-backed or heuristic summary client.
+    """
+
+    if settings.model_provider == "openai":
+        api_key = _openai_api_key(settings)
+        if api_key is None:
+            raise SummaryModelCallError(
+                "OPEN_TABS_MODEL_PROVIDER=openai requires OPENAI_API_KEY "
+                "or OPEN_TABS_OPENAI_API_KEY.",
+            )
+        return OpenAISummaryClient(_openai_responses_client(settings, api_key))
+    return HeuristicSummaryClient()
+
+
+def _openai_api_key(settings: Settings) -> str | None:
+    """Return the configured OpenAI API key.
+
+    Args:
+        settings: Runtime settings containing provider configuration.
+
+    Returns:
+        The resolved API key, or None when no key is configured.
+    """
+
+    return settings.resolved_openai_api_key()
+
+
+def _openai_responses_client(
+    settings: Settings,
+    api_key: str,
+) -> OpenAIResponsesClient:
+    """Build an OpenAI Responses API client from settings.
+
+    Args:
+        settings: Runtime settings containing provider configuration.
+        api_key: OpenAI API key.
+
+    Returns:
+        OpenAI Responses API client.
+    """
+
+    return OpenAIResponsesClient(
+        api_key=api_key,
+        model=settings.openai_model,
+        endpoint=settings.openai_responses_url,
+        timeout_seconds=settings.openai_timeout_seconds,
     )
 
 

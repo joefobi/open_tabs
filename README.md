@@ -91,6 +91,27 @@ allows configured loopback CORS origins, including fallback Vite ports, and the
 sidebar recreates its anonymous installation credential once if a stored
 credential becomes stale after a local database reset.
 
+## OpenAI model provider
+
+Detection and summary jobs use deterministic local heuristics by default. To run
+those jobs with OpenAI instead, set:
+
+```sh
+export OPEN_TABS_MODEL_PROVIDER=openai
+export OPENAI_API_KEY=sk-...
+```
+
+You can also use `OPEN_TABS_OPENAI_API_KEY` if you prefer the project-specific
+environment variable. The default text model is `gpt-4.1-mini`; override it with:
+
+```sh
+export OPEN_TABS_OPENAI_MODEL=gpt-4.1-mini
+```
+
+The OpenAI provider is used by the Python detection and summarization job entry
+points. Scans still need job execution through Trigger.dev or direct job entry
+point invocation before detected task cards appear in the sidebar.
+
 ## Current implementation
 
 The Python backend currently exposes anonymous installation onboarding,
@@ -129,8 +150,9 @@ text-first path, including automatic event-driven collection and single-flight
 background submission. The Vite-launched sidebar can connect directly to the
 local backend for development; the Chrome extension side panel connects through
 its service worker. Trigger.dev wrappers and Python job entry points are
-implemented for detection and summarization. Model-provider integration, image
-upload, and optional screenshot fallback are not implemented yet.
+implemented for detection and summarization. OpenAI-backed text detection and
+summarization are available behind explicit environment configuration. Image
+upload and optional screenshot fallback are not implemented yet.
 
 Trigger.dev wrappers live in `trigger/` and execute Python job entry points in
 `backend/jobs/`. Configure `TRIGGER_PROJECT_REF` before running Trigger commands.
