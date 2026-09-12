@@ -46,9 +46,16 @@ Tests cover the anonymous identity boundary, manual task lifecycle, idempotent
 manual creation, validation errors, owner isolation, clear-data behavior, and
 OpenAPI contract freshness.
 
-The extension middle layer, scan ingestion routes, Trigger.dev workflows,
-model-backed detection, summarization, image upload, and optional screenshot
-fallback are not implemented yet.
+The extension will not expose a user-facing Scan Now button in the MVP. The
+intended collection model is automatic page-text observation from permitted
+HTTP(S) pages as the user visits, activates, or navigates tabs. The service
+worker will flush changed observations to the backend as internal scan batches.
+Screenshots are not automatic or periodic; optional screenshot fallback should
+only happen after a user action for the active visible page.
+
+The extension middle layer, automatic observation collection, scan ingestion
+routes, Trigger.dev workflows, model-backed detection, summarization, image
+upload, and optional screenshot fallback are not implemented yet.
 
 ## Layout
 

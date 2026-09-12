@@ -2,6 +2,11 @@
 
 Follow BACKEND_DESIGN.md for architecture and confirmed product decisions.
 
+## PR checklist
+
+- Every PR must include a README check: update README.md when setup, commands, implemented functionality, contracts, workflows, or known gaps change.
+- Every PR must include a BACKEND_DESIGN.md check: update it when architecture, ownership, product decisions, data flow, API contracts, reliability behavior, or deferred scope changes.
+
 ## Python standards
 
 - Every Python module, class, function, and method must have a docstring, including private helpers and tests.
@@ -13,6 +18,7 @@ Follow BACKEND_DESIGN.md for architecture and confirmed product decisions.
   - `uv run --locked black --check .`
   - `uv run --locked isort --check-only .`
   - `uv run --locked mypy .`
+  - `uv run --locked pytest`
 
 Example:
 
@@ -29,4 +35,4 @@ def normalize_title(title: str) -> str:
     return title.strip()
 ```
 
-Black, isort, and mypy do not enforce docstring completeness or Google style; this is a required authoring and review convention.
+Black, isort, mypy, and pytest do not enforce docstring completeness or Google style; this is a required authoring and review convention.
