@@ -13,6 +13,7 @@ Confirmed decisions:
 - Anyone should be able to install and start using the extension through self-service onboarding.
 - Tasks have In Progress, Needs Attention, Action Complete, or Error status. Needs Attention alone is sufficient; intervention buttons are deferred.
 - Manual task addition, expandable summaries, and return-to-tab navigation are included. The app observes and summarizes; it does not execute actions.
+- The MVP does not include a user-facing Scan Now button. The extension observes permitted pages as the user visits and uses them, then submits changed page observations in the background.
 
 The backend engineer owns the extension middle layer, including tab scanning, content extraction, service worker orchestration, API calls, credential storage, tab routing, optional screenshot capture, and scan persistence. The backend engineer also owns the Python API, persistence, model calls, Trigger.dev workflows, and anonymous installation identity boundary. Evelyn owns the sidebar UI and task cards. Framework, database hosting, and model provider remain proposals.
 
@@ -35,9 +36,9 @@ flowchart LR
   Extension -. optional screenshot .-> API
 ```
 
-1. After onboarding and permission setup, the extension enumerates open tabs and extracts bounded readable text from pages it can access.
-2. It associates each observation with its URL, title, local tab mapping, and capture time. It records inaccessible pages separately instead of pretending they were analyzed.
-3. The Python API validates and persists observations and submits a detection job, returning a scan ID.
+1. After onboarding and permission setup, the extension observes permitted HTTP(S) pages as the user visits, activates, or navigates tabs.
+2. It extracts bounded readable text from pages it can access and associates each observation with its URL, title, local tab mapping, and capture time. It records inaccessible pages separately instead of pretending they were analyzed.
+3. The service worker persists pending observations locally and periodically flushes changed observations to the Python API as an internal scan batch. The Python API validates and persists observations and submits detection jobs, returning a scan ID for backend tracking.
 4. Python detection code calls the model with the text, URL, and title. The model identifies a supported activity, describes the evidence, and proposes a status, or returns no task/insufficient evidence.
 5. Valid detection results update tasks and trigger summary generation. The summary job writes one or two sentences describing the current visible state.
 6. The sidebar polls persisted tasks. Clicking a task focuses its source tab. Closing the sidebar does not cancel submitted work.
@@ -54,7 +55,9 @@ Proposed limits: 12,000 text characters per page, 20 observations per batch, and
 
 Use URL/title alone for a broad hint if extraction fails, but do not infer detailed progress from metadata. Inaccessible, unloaded, frame-isolated, and visually rendered pages may yield little text. Generic extraction expands coverage without guaranteeing support for every website.
 
-Start with Scan Now; add debounced refresh on navigation, activation, and meaningful content changes. Proposed debounce: two seconds. Hash normalized content plus URL/title to skip unchanged observations. Persist pending submissions and cached cards in extension storage so worker restarts do not lose them. Reference: [Chrome service worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle).
+Do not expose a Scan Now button in the MVP. Collect page text opportunistically after navigation, tab activation, and meaningful content changes, with a low-frequency periodic refresh for active/open permitted pages. Proposed content-change debounce: two seconds. Proposed periodic refresh: every five minutes while the browser is active, with measurement before increasing frequency. Hash normalized content plus URL/title to skip unchanged observations. Persist pending submissions and cached cards in extension storage so worker restarts do not lose them. Reference: [Chrome service worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle).
+
+A backend `Scan` is still useful, but it is not a user-facing action. Treat it as an idempotent ingestion batch created by the service worker when it flushes one or more changed observations. The sidebar should display task freshness, processing state, and collection gaps rather than a scan button or scan-centric workflow.
 
 ## 4. Optional screenshot fallback
 
@@ -63,13 +66,13 @@ The main flow must work without screenshots. Build and evaluate text extraction 
 Proposed fallback behavior:
 
 1. Extraction yields little useful text, or detection returns insufficient evidence.
-2. Offer an optional user-invoked screenshot capture for that page; do not automatically upload screenshots from every tab.
+2. Offer an optional user-invoked screenshot capture for that page; do not automatically or periodically upload screenshots from every tab.
 3. Capture the visible active page, verify its URL/tab still matches the requested source, and submit a new observation revision with an owned image reference.
 4. Run detection again using a vision-capable model with the available text and screenshot. If evidence is still insufficient, retain that outcome rather than guessing.
 
 A clear no-task result is not itself a reason to request a screenshot. Do not nag repeatedly for the same unchanged page. Capture the current text and image together as closely as possible; never combine a new screenshot with stale text from a different navigation.
 
-Chrome's normal `captureVisibleTab` API captures the active tab's visible area, not all background tabs. Never cycle through tabs automatically to take screenshots. `activeTab` requires a qualifying user invocation; merely switching tabs does not grant access. References: [tabs API](https://developer.chrome.com/docs/extensions/reference/api/tabs), [activeTab](https://developer.chrome.com/docs/extensions/develop/concepts/activeTab).
+Chrome's normal `captureVisibleTab` API captures the active tab's visible area, not all background tabs. Never cycle through tabs automatically to take screenshots, and do not use screenshots as the periodic observation mechanism. `activeTab` requires a qualifying user invocation; merely switching tabs does not grant access. References: [tabs API](https://developer.chrome.com/docs/extensions/reference/api/tabs), [activeTab](https://developer.chrome.com/docs/extensions/develop/concepts/activeTab).
 
 Store fallback images privately, validate ownership and image type/size, and pass IDs to workers. Screenshots can expose information excluded by the text collector, so explain capture before upload. Proposed image limit: 5 MB. Retention is shared with raw observations below.
 
@@ -133,8 +136,8 @@ The sidebar sends typed extension messages to the service worker, which owns HTT
 | Endpoint | Purpose |
 | --- | --- |
 | `POST /v1/installations` | Issue an anonymous installation credential and create the owner boundary |
-| `POST /v1/scans` | Submit client request ID and observations; return `202 {scan_id, state}` after enqueue |
-| `GET /v1/scans/:id` | Return processing counts, per-item outcomes, and errors |
+| `POST /v1/scans` | Submit a service-worker ingestion batch with client request ID and observations; return `202 {scan_id, state}` after enqueue |
+| `GET /v1/scans/:id` | Return service-worker-visible processing counts, per-item outcomes, and errors |
 | `GET /v1/tasks` | Return owner-scoped task cards |
 | `POST /v1/tasks` | Idempotent manual add using client request ID and title |
 | `PATCH /v1/tasks/:id` | Edit manual task title/status |
@@ -149,7 +152,7 @@ Task response: `{id, origin, source_key, source_url, type, title, status, status
 
 Errors: `{error: {code, message, retryable}}`. Use 400 for invalid input, 401 for missing/invalid anonymous installation credentials, 404 for absent or other-owner resources, and 429 for limits.
 
-Extension messages: `SCAN_NOW`, `LIST_TASKS`, `ADD_MANUAL_TASK`, `UPDATE_MANUAL_TASK`, `RETRY_TASK`, `OPEN_TASK_SOURCE`, and optional `CAPTURE_FALLBACK`. Poll every two seconds while jobs are pending and the panel is open; back off when idle and stop on panel closure. Display last observation time and collection gaps separately from task status.
+Extension messages: `LIST_TASKS`, `ADD_MANUAL_TASK`, `UPDATE_MANUAL_TASK`, `RETRY_TASK`, `OPEN_TASK_SOURCE`, and optional `CAPTURE_FALLBACK`. Background collection is owned by the service worker and content scripts rather than initiated by a sidebar button. Poll every two seconds while jobs are pending and the panel is open; back off when idle and stop on panel closure. Display last observation time and collection gaps separately from task status.
 
 ## 9. Workflow reliability
 
@@ -186,20 +189,20 @@ trigger.config.ts       # Python packaging configuration
 
 ## 11. Implementation order and validation
 
-1. Agree on API fixtures with Evelyn and build BE-owned text extraction/service worker -> Python API -> Trigger.dev detection -> summary -> sidebar.
+1. Agree on API fixtures with Evelyn and build BE-owned automatic text extraction/service worker batching -> Python API -> Trigger.dev detection -> summary -> sidebar.
 2. Add manual tasks, tab navigation, recovery, and anonymous self-service onboarding.
 3. Evaluate multiple developer and personal pages, including pages with no task and insufficient information.
 4. Add optional screenshot fallback after text-path quality is measured. The core demo must work with screenshots disabled.
 5. Complete public distribution preparation and test per-owner access and deletion.
 
-Required checks: generic extraction excludes editable/hidden content; truncation preserves useful evidence; denied/inaccessible tabs remain understandable; duplicate submissions do not duplicate tasks; old detection and summary jobs cannot overwrite newer state; retries recover partial dispatch; closing/reopening the panel preserves results; tab switching cannot misassociate a screenshot; other-owner images and tasks cannot be accessed; deletion cannot be undone by an in-flight job.
+Required checks: generic extraction excludes editable/hidden content; truncation preserves useful evidence; denied/inaccessible tabs remain understandable; automatic refresh skips unchanged observations; duplicate submissions do not duplicate tasks; old detection and summary jobs cannot overwrite newer state; retries recover partial dispatch; closing/reopening the panel preserves results; tab switching cannot misassociate a screenshot; other-owner images and tasks cannot be accessed; deletion cannot be undone by an in-flight job.
 
 Evaluate model accuracy against sanitized fixtures rather than testing exact summary wording. Record latency and model cost before enabling frequent automatic scans. Targets, not guarantees: completed text analysis within fifteen seconds under demo conditions. Label fixture/demo data explicitly.
 
 ## 12. Remaining decisions
 
-- FastAPI acceptance, database hosting, and model provider/model.
+- Database hosting and model provider/model.
 - Initial host-permission scope and automatic refresh frequency.
 - Text extraction thresholds and when to offer the optional screenshot fallback, based on evaluation.
 
-The primary collection approach is settled: page text + URL/title first. This document specifies the design; application code and infrastructure have not been created.
+The primary collection approach is settled: page text + URL/title first. Backend foundation and manual task APIs exist; extension collection, scan ingestion, Trigger.dev workflows, model-backed detection, summarization, image upload, and screenshot fallback remain to be implemented.
