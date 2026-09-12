@@ -181,6 +181,7 @@ export interface ChromeApi {
     onAlarm: ChromeEvent<(alarm: { name: string }) => void>;
   };
   runtime: {
+    getURL(path: string): string;
     onInstalled?: ChromeEvent<() => void>;
     onMessage: {
       addListener(
@@ -195,7 +196,7 @@ export interface ChromeApi {
   };
   sidePanel: {
     open(options: { tabId?: number; windowId?: number }): Promise<void>;
-    setOptions?(options: { path: string; enabled: boolean }): Promise<void>;
+    setOptions?(options: { tabId?: number; path: string; enabled: boolean }): Promise<void>;
     setPanelBehavior?(behavior: { openPanelOnActionClick: boolean }): Promise<void>;
   };
   scripting: {

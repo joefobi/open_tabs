@@ -28,9 +28,10 @@ let observationFlushInFlight = false;
 let observationFlushRequested = false;
 
 chrome.action.onClicked.addListener((tab) => {
-  void openSidePanel(tab).catch((error: unknown) =>
-    console.warn("Unable to open the OpenTabs side panel.", error),
-  );
+  void openSidePanel(tab).catch((error: unknown) => {
+    console.warn("Unable to open the OpenTabs side panel.", error);
+    void openExtensionPageFallback();
+  });
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -57,6 +58,14 @@ void credentials
 
 async function openSidePanel(tab: { id?: number; windowId?: number }): Promise<void> {
   // Open the side panel for the active browser window or tab.
+  if (tab.id !== undefined) {
+    await chrome.sidePanel.setOptions?.({
+      tabId: tab.id,
+      path: "index.html",
+      enabled: true,
+    });
+  }
+
   if (tab.windowId !== undefined) {
     await chrome.sidePanel.open({ windowId: tab.windowId });
     return;
@@ -64,6 +73,13 @@ async function openSidePanel(tab: { id?: number; windowId?: number }): Promise<v
   if (tab.id !== undefined) {
     await chrome.sidePanel.open({ tabId: tab.id });
   }
+}
+
+async function openExtensionPageFallback(): Promise<void> {
+  await chrome.tabs.create({
+    active: true,
+    url: chrome.runtime.getURL("index.html"),
+  });
 }
 
 function configureSidePanel(): void {
