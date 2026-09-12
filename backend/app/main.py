@@ -11,6 +11,7 @@ from backend.app.dependencies import get_database
 from backend.app.errors import http_exception_handler, validation_exception_handler
 from backend.app.routes.health import router as health_router
 from backend.app.routes.installations import router as installations_router
+from backend.app.routes.scans import router as scans_router
 from backend.app.routes.tasks import router as tasks_router
 
 
@@ -64,6 +65,7 @@ def create_app(database: Database | None = None) -> FastAPI:
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.include_router(health_router)
     app.include_router(installations_router)
+    app.include_router(scans_router)
     app.include_router(tasks_router)
     return app
 
