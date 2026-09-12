@@ -3,13 +3,77 @@
 Chrome extension with a Python backend for detecting tasks from page text, URL,
 and title, with optional screenshot fallback. See [the design](BACKEND_DESIGN.md).
 
-## Development
+## Local setup
+
+The extension is not published in the Chrome Web Store yet. Test it locally by
+running the API yourself and loading the built extension as an unpacked
+development extension.
 
 Install Python 3.12+ and uv, then run:
 
 ```sh
 uv sync --locked
 uv run uvicorn backend.app.main:app --reload
+```
+
+The API should be available at:
+
+```text
+http://127.0.0.1:8000
+```
+
+The root path returns `{"detail":"Not Found"}` because there is no homepage on
+the API. Use these URLs instead:
+
+```text
+http://127.0.0.1:8000/healthz
+http://127.0.0.1:8000/docs
+```
+
+Build and load the extension:
+
+```sh
+cd apps/extension
+npm install
+npm run build
+```
+
+Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**,
+then select:
+
+```text
+apps/extension/dist
+```
+
+After every rebuild, click the reload icon on the `OpenTabs AI` extension card
+before testing again. In Chrome, use the pinned toolbar icon to open the
+extension UI. Chrome may show it as a side panel or popup. Arc is Chromium-based
+but its side panel behavior differs from Chrome, so Arc should use the toolbar
+popup path.
+
+For sidebar-only development, you can also run Vite:
+
+```sh
+cd apps/extension
+npm run dev
+```
+
+Then open:
+
+```text
+http://127.0.0.1:5173/
+```
+
+The Vite page can test backend connectivity for installation creation and manual
+task create/list behavior. It cannot scan browser tabs because ordinary
+webpages do not have extension tab permissions. Tab observation only runs from
+the loaded unpacked extension.
+
+## Development checks
+
+Run the Python checks from the repository root:
+
+```sh
 uv run --locked black --check .
 uv run --locked isort --check-only .
 uv run --locked mypy .
