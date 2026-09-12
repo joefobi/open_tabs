@@ -14,9 +14,10 @@ Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**,
 then select `apps/extension/dist`.
 
 After rebuilding, click the reload icon on the `OpenTabs AI` extension card. Open
-the side panel from the pinned toolbar icon or from Chrome's Extensions menu;
-clicking the logo on the `chrome://extensions` card itself does not launch the
-extension UI.
+the UI from the pinned toolbar icon or from Chrome's Extensions menu; clicking
+the logo on the `chrome://extensions` card itself does not launch the extension
+UI. Chrome can also expose the same page as a side panel. Arc may fall back to
+the toolbar popup because its side panel support differs from Chrome's.
 
 The sidebar stores pre-seeded demo tasks locally so it stays useful when backend
 jobs are unavailable. The service worker also detects the PRD's URL-first GitHub,
