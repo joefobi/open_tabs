@@ -164,6 +164,8 @@ Assign source revisions when accepting observations, before model calls. Seriali
 
 Persist accepted detection output before dispatching summaries. Retries resume pending summary dispatch even if detection already committed. Use task/revision idempotency keys and database uniqueness together. Every scan item reaches a terminal state, including superseded, no-task, insufficient-evidence, and failed items; scans must not spin forever.
 
+For MVP local development, the API may run deterministic heuristic detection and summarization inline immediately after accepting a scan. This keeps the sidebar populated from scanned tabs before hosted Trigger.dev dispatch and model-provider integration are complete. Inline work must use the same revision guards and idempotency semantics as queued jobs so the transition to external workers does not change task behavior.
+
 Proposed retry policy: three attempts with exponential backoff for transient provider/network failures, bounded model timeouts, and no retries for invalid input. Tune timeouts after measuring text and vision calls. References: [Trigger.dev idempotency](https://trigger.dev/docs/idempotency), [retries](https://trigger.dev/docs/errors-retrying).
 
 Deletion invalidates source revisions before cleanup so in-flight jobs cannot recreate deleted records from old observations. Respect site exclusions and clear pending local submissions when clearing data.
@@ -207,4 +209,4 @@ Evaluate model accuracy against sanitized fixtures rather than testing exact sum
 - Initial host-permission scope and automatic refresh frequency.
 - Text extraction thresholds and when to offer the optional screenshot fallback, based on evaluation.
 
-The primary collection approach is settled: page text + URL/title first. Backend foundation, manual task APIs, extension middle layer, scan ingestion, and automatic event-driven collection exist for the text-first path. Trigger.dev workflows, model-backed detection, summarization, image upload, and screenshot fallback remain to be implemented.
+The primary collection approach is settled: page text + URL/title first. Backend foundation, manual task APIs, extension middle layer, scan ingestion, automatic event-driven collection, local heuristic detection, and local heuristic summarization exist for the text-first path. Hosted Trigger.dev dispatch, model-provider integration, image upload, and screenshot fallback remain to be implemented.

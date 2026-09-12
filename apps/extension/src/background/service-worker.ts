@@ -107,6 +107,7 @@ async function handleMessage(message: ExtensionMessage): Promise<unknown> {
     case "GET_SCAN":
       return apiClient.getScan(message.scanId);
     case "LIST_TASKS":
+      scheduleObservationFlush();
       return apiClient.listTasks();
     case "ADD_MANUAL_TASK":
       return apiClient.createManualTask({
