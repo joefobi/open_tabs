@@ -1,0 +1,32 @@
+[project]
+name = "browser-task-sidebar"
+version = "0.1.0"
+description = "Browser task detection and context summaries"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "black>=26.1,<27",
+    "isort>=7,<8",
+    "mypy>=1.19,<2",
+]
+
+[tool.uv]
+package = false
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+skip = [".git", ".venv", "node_modules", "dist", "build"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+pretty = true
+show_error_codes = true
+exclude = ["^\\.venv/", "(^|/)node_modules/", "(^|/)(dist|build)/"]
