@@ -60,16 +60,12 @@ async function openTaskSource(tabId: number | undefined, url: string): Promise<{
   if (tabId !== undefined) {
     try {
       const existing = await chrome.tabs.get(tabId);
-      if (existing.url !== url) {
-        return { opened: false };
-      }
-      await chrome.tabs.update(tabId, { active: true });
-      const tab = await chrome.tabs.get(tabId);
-      if (tab.url === url) {
+      if (existing.url === url) {
+        await chrome.tabs.update(tabId, { active: true });
         return { opened: true };
       }
     } catch {
-      return { opened: false };
+      // Fall through to reopen by URL when the session tab mapping is stale.
     }
   }
   try {

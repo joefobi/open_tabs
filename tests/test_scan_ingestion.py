@@ -86,6 +86,10 @@ def test_unchanged_source_does_not_create_new_revision(
     second_request = _fixture_request(
         client_request_id="fixture-scan-002",
         client_observation_id="fixture-observation-002",
+        source_url=(
+            "https://github.com/example/project/pull/42"
+            "?utm_source=other&gclid=ignored"
+        ),
     )
 
     first = app_harness.client.post(
@@ -115,6 +119,30 @@ def test_unchanged_source_does_not_create_new_revision(
     with app_harness.database.session_factory() as session:
         observations = session.query(Observation).all()
     assert len(observations) == 1
+
+
+def test_conflicting_client_observation_id_is_rejected(
+    app_harness: AppHarness,
+) -> None:
+    """Reject a reused client observation ID with different content."""
+
+    credential = _install(app_harness.client)
+    first_request = _fixture_request()
+    conflicting_request = _fixture_request(
+        client_request_id="fixture-scan-002",
+        text="Different page text for the same client observation id.",
+    )
+
+    first = app_harness.client.post(
+        "/v1/scans", headers=_headers(credential), json=first_request
+    )
+    conflict = app_harness.client.post(
+        "/v1/scans", headers=_headers(credential), json=conflicting_request
+    )
+
+    assert first.status_code == 202
+    assert conflict.status_code == 400
+    assert conflict.json()["error"]["code"] == "invalid_request"
 
 
 def test_owner_cannot_read_another_owner_scan(app_harness: AppHarness) -> None:
@@ -201,12 +229,16 @@ def _fixture_request(
     *,
     client_request_id: str = "fixture-scan-001",
     client_observation_id: str = "fixture-observation-001",
+    source_url: str | None = None,
+    text: str | None = None,
 ) -> dict[str, Any]:
     """Load and customize the scan ingestion fixture.
 
     Args:
         client_request_id: Replacement scan idempotency key.
         client_observation_id: Replacement observation idempotency key.
+        source_url: Optional replacement source URL.
+        text: Optional replacement extracted text.
 
     Returns:
         The request payload.
@@ -222,4 +254,8 @@ def _fixture_request(
     if not isinstance(observation, dict):
         raise TypeError("Fixture observation must be an object.")
     observation["client_observation_id"] = client_observation_id
+    if source_url is not None:
+        observation["source_url"] = source_url
+    if text is not None:
+        observation["text"] = text
     return payload

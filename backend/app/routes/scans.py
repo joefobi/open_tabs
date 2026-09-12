@@ -6,6 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.app.auth.anonymous import require_owner
@@ -61,20 +62,38 @@ def create_scan(
             scan_id=UUID(existing.id), state=ScanState(existing.state)
         )
 
-    scan = Scan(
-        owner_id=owner.id,
-        client_request_id=request.client_request_id,
-        state=ScanState.QUEUED.value,
-    )
-    session.add(scan)
-    session.flush()
+    try:
+        scan = Scan(
+            owner_id=owner.id,
+            client_request_id=request.client_request_id,
+            state=ScanState.QUEUED.value,
+        )
+        session.add(scan)
+        session.flush()
 
-    for observation in request.observations:
-        _ingest_observation(session, owner, scan, observation)
+        for observation in request.observations:
+            _ingest_observation(session, owner, scan, observation)
 
-    _refresh_scan_counts(session, scan)
-    session.commit()
-    session.refresh(scan)
+        _refresh_scan_counts(session, scan)
+        session.commit()
+        session.refresh(scan)
+    except IntegrityError as exc:
+        session.rollback()
+        existing = session.scalar(
+            select(Scan).where(
+                Scan.owner_id == owner.id,
+                Scan.client_request_id == request.client_request_id,
+            )
+        )
+        if existing is not None:
+            return ScanCreateResponse(
+                scan_id=UUID(existing.id), state=ScanState(existing.state)
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Scan conflicts with existing owner-scoped idempotency data.",
+        ) from exc
+
     return ScanCreateResponse(scan_id=UUID(scan.id), state=ScanState(scan.state))
 
 
@@ -138,6 +157,14 @@ def _ingest_observation(
     _validate_screenshot_ownership(session, owner, observation_input)
 
     source = _get_or_create_source(session, owner, source_key)
+    content_hash = _content_hash(observation_input, source_key)
+    existing_observation = _observation_by_client_id(session, owner, observation_input)
+    if existing_observation is not None:
+        _add_existing_observation_item(
+            session, scan, source_key, content_hash, existing_observation
+        )
+        return
+
     latest_observation = _latest_observation(session, source)
 
     if (
@@ -156,7 +183,6 @@ def _ingest_observation(
         )
         return
 
-    content_hash = _content_hash(observation_input)
     if (
         latest_observation is not None
         and latest_observation.content_hash == content_hash
@@ -240,6 +266,72 @@ def _latest_observation(session: Session, source: Source) -> Observation | None:
     if source.latest_observation_id is None:
         return None
     return session.get(Observation, source.latest_observation_id)
+
+
+def _observation_by_client_id(
+    session: Session,
+    owner: Owner,
+    observation_input: ObservationInput,
+) -> Observation | None:
+    """Return an existing owner-scoped observation with the client ID.
+
+    Args:
+        session: Database session used to load the observation.
+        owner: Authenticated owner that owns the observation.
+        observation_input: Observation payload with the client observation ID.
+
+    Returns:
+        Existing observation row or None.
+    """
+
+    return session.scalar(
+        select(Observation).where(
+            Observation.owner_id == owner.id,
+            Observation.client_observation_id
+            == observation_input.client_observation_id,
+        )
+    )
+
+
+def _add_existing_observation_item(
+    session: Session,
+    scan: Scan,
+    source_key: str,
+    content_hash: str,
+    observation: Observation,
+) -> None:
+    """Attach a scan item to an already accepted observation.
+
+    Args:
+        session: Database session used to load the observation source.
+        scan: Scan row receiving the item.
+        source_key: Source key derived from the current observation payload.
+        content_hash: Content hash derived from the current observation payload.
+        observation: Previously accepted observation with the same client ID.
+
+    Raises:
+        HTTPException: Raised when the reused client observation ID conflicts.
+    """
+
+    existing_source = session.get(Source, observation.source_id)
+    if (
+        existing_source is None
+        or existing_source.source_key != source_key
+        or observation.content_hash != content_hash
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="client_observation_id conflicts with an existing observation.",
+        )
+
+    session.add(
+        ScanItem(
+            scan_id=scan.id,
+            observation_id=observation.id,
+            processing_state=ScanItemState.UNCHANGED.value,
+            detection_outcome=ScanItemState.UNCHANGED.value,
+        )
+    )
 
 
 def _validate_screenshot_ownership(
@@ -383,11 +475,12 @@ def _scan_counts(items: list[ScanItemResponse]) -> ScanCounts:
     )
 
 
-def _content_hash(observation_input: ObservationInput) -> str:
+def _content_hash(observation_input: ObservationInput, source_key: str) -> str:
     """Hash meaningful submitted content for source revision checks.
 
     Args:
         observation_input: Observation payload to hash.
+        source_key: Normalized source key used for owner-scoped grouping.
 
     Returns:
         Hex-encoded SHA-256 digest.
@@ -396,7 +489,7 @@ def _content_hash(observation_input: ObservationInput) -> str:
     normalized_text = " ".join(observation_input.text.split())
     payload = "\n".join(
         [
-            str(observation_input.source_url).strip(),
+            source_key,
             observation_input.title.strip(),
             normalized_text,
             observation_input.extraction_state.value,
