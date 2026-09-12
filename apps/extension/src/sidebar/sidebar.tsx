@@ -1,6 +1,16 @@
 import { FormEvent, JSX, useCallback, useEffect, useState } from "react";
 import type { SidebarSnapshot, Task, TaskStatus } from "./types";
 
+interface BackendTask {
+  id: string;
+  origin: "detected" | "manual";
+  source_url: string | null;
+  title: string;
+  status: TaskStatus;
+  summary: string | null;
+  processing_state: "queued" | "running" | "ready" | "failed";
+}
+
 const statusLabel: Record<TaskStatus, string> = {
   action_complete: "Action Complete",
   in_progress: "In Progress",
@@ -18,14 +28,47 @@ let browserPreview: SidebarSnapshot = {
   ],
 };
 
+function normalizeSourceUrl(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const parsed = new URL(candidate);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
+
 function send<T>(message: object): Promise<T> {
   if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
-    const action = message as { type: string; id?: string; title?: string; sourceUrl?: string | null; status?: TaskStatus };
+    const action = message as { type: string; title?: string; sourceUrl?: string | null };
     if (action.type === "ADD_MANUAL_TASK" && action.title) browserPreview = { ...browserPreview, tasks: [...browserPreview.tasks, { id: crypto.randomUUID(), title: action.title, sourceUrl: action.sourceUrl ?? null, status: "in_progress", summary: "Added manually — no linked tab yet.", origin: "manual" }] };
-    if (action.type === "UPDATE_TASK" && action.id && action.status) browserPreview = { ...browserPreview, tasks: browserPreview.tasks.map((task) => task.id === action.id ? { ...task, status: action.status!, summary: action.status === "action_complete" ? "Confirmed just now." : "Paused — you dismissed the prompt." } : task) };
     return Promise.resolve(browserPreview as T);
   }
-  return chrome.runtime.sendMessage(message) as Promise<T>;
+  return chrome.runtime.sendMessage(message).then((reply: { ok: boolean; response?: T; error?: { message?: string } }) => {
+    if (!reply.ok) throw new Error(reply.error?.message ?? "The extension request failed.");
+    return reply.response as T;
+  });
+}
+
+async function getSnapshot(): Promise<SidebarSnapshot> {
+  if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) return browserPreview;
+  const result = await send<{ tasks: BackendTask[] }>({ type: "LIST_TASKS" });
+  const tabs = await chrome.tabs.query({});
+  return {
+    tabCount: tabs.filter((tab) => tab.url?.startsWith("http")).length,
+    usingFallback: false,
+    tasks: result.tasks.map((task) => ({
+      id: task.id,
+      title: task.title,
+      sourceUrl: task.source_url,
+      status: task.status,
+      summary: task.summary ?? "Detecting task…",
+      origin: task.origin,
+      processingState: task.processing_state,
+    })),
+  };
 }
 
 function RadarIcon(): JSX.Element {
@@ -49,7 +92,7 @@ export function Sidebar(): JSX.Element {
   const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    try { setSnapshot(await send<SidebarSnapshot>({ type: "LIST_TASKS" })); }
+    try { setSnapshot(await getSnapshot()); }
     catch { setNotice("Showing reliable demo tasks while the API reconnects."); }
   }, []);
 
@@ -58,16 +101,14 @@ export function Sidebar(): JSX.Element {
   const addTask = async (event: FormEvent) => {
     event.preventDefault();
     if (!title.trim()) return;
-    const next = await send<SidebarSnapshot>({ type: "ADD_MANUAL_TASK", title: title.trim(), sourceUrl: url.trim() || null });
-    setSnapshot(next); setTitle(""); setUrl(""); setIsAdding(false);
-  };
-
-  const update = async (id: string, status: TaskStatus) => {
-    setSnapshot(await send<SidebarSnapshot>({ type: "UPDATE_TASK", id, status }));
+    const sourceUrl = normalizeSourceUrl(url);
+    if (url.trim() && !sourceUrl) { setNotice("Enter a valid http(s) source URL."); return; }
+    await send({ type: "ADD_MANUAL_TASK", clientRequestId: crypto.randomUUID(), title: title.trim(), sourceUrl });
+    await refresh(); setTitle(""); setUrl(""); setIsAdding(false);
   };
 
   const openTask = async (task: Task) => {
-    await send({ type: "OPEN_TASK_SOURCE", sourceUrl: task.sourceUrl });
+    await send({ type: "OPEN_TASK_SOURCE", url: task.sourceUrl });
     setNotice("Jumped to the source tab.");
   };
 
@@ -92,8 +133,6 @@ export function Sidebar(): JSX.Element {
         </div>
         <div className="status-row"><StatusPill status={task.status} /><button className="btn btn-ghost summary-toggle" onClick={() => setExpanded((items) => ({ ...items, [task.id]: !items[task.id] }))}>{expanded[task.id] ? "Hide summary ˄" : "Show summary ˅"}</button></div>
         {expanded[task.id] && <p className="card-body summary">{task.summary}</p>}
-        {task.status === "needs_attention" && <div className="card-actions"><button className="btn btn-primary" onClick={() => void update(task.id, "action_complete")}>Confirm purchase</button><button className="btn btn-ghost" onClick={() => void update(task.id, "in_progress")}>Dismiss</button></div>}
-        {task.status === "error" && <div className="card-actions"><button className="btn btn-secondary" onClick={() => void update(task.id, "in_progress")}>Retry</button></div>}
       </article>)}
     </section>
   </main>;
