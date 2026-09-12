@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/browser-task-sidebar/extension-messages.schema.json",
+  "title": "Extension service worker messages",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "SCAN_NOW" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "LIST_TASKS" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["type", "clientRequestId", "title"],
+      "properties": {
+        "type": { "const": "ADD_MANUAL_TASK" },
+        "clientRequestId": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["type", "taskId", "patch"],
+      "properties": {
+        "type": { "const": "UPDATE_MANUAL_TASK" },
+        "taskId": { "type": "string", "format": "uuid" },
+        "patch": {
+          "type": "object",
+          "properties": {
+            "title": { "type": ["string", "null"] },
+            "status": {
+              "type": ["string", "null"],
+              "enum": ["in_progress", "needs_attention", "action_complete", "error", null]
+            },
+            "status_reason": { "type": ["string", "null"] }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["type", "taskId"],
+      "properties": {
+        "type": { "const": "DELETE_TASK" },
+        "taskId": { "type": "string", "format": "uuid" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "CLEAR_DATA" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["type", "scanId"],
+      "properties": {
+        "type": { "const": "GET_SCAN" },
+        "scanId": { "type": "string", "format": "uuid" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["type", "url"],
+      "properties": {
+        "type": { "const": "OPEN_TASK_SOURCE" },
+        "tabId": { "type": "integer" },
+        "url": { "type": "string", "format": "uri" }
+      },
+      "additionalProperties": false
+    }
+  ]
+}
