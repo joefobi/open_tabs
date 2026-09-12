@@ -28,6 +28,8 @@ The Python backend currently exposes anonymous installation onboarding,
 structured error responses, and owner-scoped manual task endpoints:
 
 - `POST /v1/installations`
+- `POST /v1/scans`
+- `GET /v1/scans/{scan_id}`
 - `GET /v1/tasks`
 - `POST /v1/tasks`
 - `PATCH /v1/tasks/{task_id}`
@@ -52,9 +54,10 @@ service worker will flush changed observations to the backend as internal scan
 batches. Screenshots are not automatic or periodic; optional screenshot fallback
 should only happen after a user action for the active visible page.
 
-The extension middle layer, automatic observation collection, scan ingestion
-routes, Trigger.dev workflows, model-backed detection, summarization, image
-upload, and optional screenshot fallback are not implemented yet.
+The extension middle layer and scan ingestion routes are implemented for the
+text-first path. Automatic event-driven collection, Trigger.dev workflows,
+model-backed detection, summarization, image upload, and optional screenshot
+fallback are not implemented yet.
 
 ## Layout
 

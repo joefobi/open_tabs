@@ -152,7 +152,7 @@ Task response: `{id, origin, source_key, source_url, type, title, status, status
 
 Errors: `{error: {code, message, retryable}}`. Use 400 for invalid input, 401 for missing/invalid anonymous installation credentials, 404 for absent or other-owner resources, and 429 for limits.
 
-Extension messages: `LIST_TASKS`, `ADD_MANUAL_TASK`, `UPDATE_MANUAL_TASK`, `RETRY_TASK`, `OPEN_TASK_SOURCE`, and optional `CAPTURE_FALLBACK`. Background collection is owned by the service worker and content scripts rather than initiated by a sidebar button. Poll every two seconds while jobs are pending and the panel is open; back off when idle and stop on panel closure. Display last observation time and collection gaps separately from task status.
+Implemented extension messages: `GET_SCAN`, `LIST_TASKS`, `ADD_MANUAL_TASK`, `UPDATE_MANUAL_TASK`, `DELETE_TASK`, `CLEAR_DATA`, and `OPEN_TASK_SOURCE`. Deferred message additions include `RETRY_TASK` and optional `CAPTURE_FALLBACK`. Background collection is owned by the service worker and content scripts. Poll every two seconds while jobs are pending and the panel is open; back off when idle and stop on panel closure. Display last observation time and collection gaps separately from task status.
 
 ## 9. Workflow reliability
 
@@ -205,4 +205,4 @@ Evaluate model accuracy against sanitized fixtures rather than testing exact sum
 - Initial host-permission scope and automatic refresh frequency.
 - Text extraction thresholds and when to offer the optional screenshot fallback, based on evaluation.
 
-The primary collection approach is settled: page text + URL/title first. Backend foundation and manual task APIs exist; extension collection, scan ingestion, Trigger.dev workflows, model-backed detection, summarization, image upload, and screenshot fallback remain to be implemented.
+The primary collection approach is settled: page text + URL/title first. Backend foundation, manual task APIs, extension middle layer, and scan ingestion exist for the text-first path. Automatic event-driven collection, Trigger.dev workflows, model-backed detection, summarization, image upload, and screenshot fallback remain to be implemented.
