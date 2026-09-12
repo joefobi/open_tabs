@@ -14,7 +14,7 @@ Confirmed decisions:
 - Tasks have In Progress, Needs Attention, Action Complete, or Error status. Needs Attention alone is sufficient; intervention buttons are deferred.
 - Manual task addition, expandable summaries, and return-to-tab navigation are included. The app observes and summarizes; it does not execute actions.
 
-The backend engineer owns collection, API, persistence, model calls, and workflows. Evelyn owns the sidebar and task cards. Framework, database hosting, model provider, and identity implementation remain proposals.
+The backend engineer owns the extension middle layer, including tab scanning, content extraction, service worker orchestration, API calls, credential storage, tab routing, optional screenshot capture, and scan persistence. The backend engineer also owns the Python API, persistence, model calls, Trigger.dev workflows, and anonymous installation identity boundary. Evelyn owns the sidebar UI and task cards. Framework, database hosting, and model provider remain proposals.
 
 ## 2. Architecture and normal flow
 
@@ -77,7 +77,7 @@ Store fallback images privately, validate ownership and image type/size, and pas
 
 Text extraction requires page access; tab metadata access alone is insufficient. Use extension storage, tabs, sidebar, and scripting capabilities as needed. Request host access through an explicit setup flow, with user-selected sites or broader coverage if the user enables it. The exact manifest and permission prompts need validation during extension implementation. Skip incognito and internal browser pages. Missing permission is a collection state, not a failed user task.
 
-Public installation requires self-service identity issuance and per-owner authorization. Auth0 is the PRD's candidate; a server-issued anonymous installation session is another option, with limited recovery and no automatic cross-device account sharing. Choose the flow before scaffolding onboarding. Manually issued demo credentials do not satisfy the public setup requirement.
+For MVP, public installation uses self-service anonymous installation identity issued by the backend. The extension stores the installation credential and sends it through the service worker for API requests. This keeps onboarding lightweight, but has limited recovery and no automatic cross-device account sharing. Auth0 is deferred. Manually issued demo credentials do not satisfy the public setup requirement.
 
 Keep model, database, and Trigger.dev credentials server-side. Apply owner checks to every task, scan, observation, and image lookup, with rate limits and model-usage caps. Never trust a body-supplied owner ID. Public distribution and its data-use explanation must be completed before calling public installation finished; publishing is a separate action from writing this design.
 
@@ -114,7 +114,7 @@ Browser tab IDs stay in local browser-session mappings. Multiple tabs with the s
 
 | Entity | Essential fields |
 | --- | --- |
-| Owner | ID, identity/session reference, created time |
+| Owner | ID, anonymous installation reference, created time |
 | Source | Owner, source key, latest accepted observation ID/revision, observed time; unique owner/source key |
 | Observation | ID, owner, source, revision, URL, title, text, extraction state, truncated flag, content hash, optional screenshot ID, capture time |
 | Task | ID, owner, origin, nullable source key/URL, type, title, status/reason, summary, processing state/error, detection/summary revisions, observed/updated times |
@@ -132,6 +132,7 @@ The sidebar sends typed extension messages to the service worker, which owns HTT
 
 | Endpoint | Purpose |
 | --- | --- |
+| `POST /v1/installations` | Issue an anonymous installation credential and create the owner boundary |
 | `POST /v1/scans` | Submit client request ID and observations; return `202 {scan_id, state}` after enqueue |
 | `GET /v1/scans/:id` | Return processing counts, per-item outcomes, and errors |
 | `GET /v1/tasks` | Return owner-scoped task cards |
@@ -146,7 +147,7 @@ Observation input: `{client_observation_id, source_url, title, observed_at, text
 
 Task response: `{id, origin, source_key, source_url, type, title, status, status_reason, summary, processing_state, processing_error_code, observed_at, updated_at}`.
 
-Errors: `{error: {code, message, retryable}}`. Use 400 for invalid input, 401 for missing/invalid identity, 404 for absent or other-owner resources, and 429 for limits. Identity endpoints depend on the onboarding choice.
+Errors: `{error: {code, message, retryable}}`. Use 400 for invalid input, 401 for missing/invalid anonymous installation credentials, 404 for absent or other-owner resources, and 429 for limits.
 
 Extension messages: `SCAN_NOW`, `LIST_TASKS`, `ADD_MANUAL_TASK`, `UPDATE_MANUAL_TASK`, `RETRY_TASK`, `OPEN_TASK_SOURCE`, and optional `CAPTURE_FALLBACK`. Poll every two seconds while jobs are pending and the panel is open; back off when idle and stop on panel closure. Display last observation time and collection gaps separately from task status.
 
@@ -166,11 +167,11 @@ Deletion invalidates source revisions before cleanup so in-flight jobs cannot re
 
 ```text
 apps/extension/src/
-  background/           # collection scheduling, API, persisted submissions, tab routing
-  collector/            # generic text extraction and optional screenshot capture
+  background/           # BE-owned service worker, collection scheduling, API, credentials, tab routing
+  collector/            # BE-owned generic text extraction and optional screenshot capture
   sidebar/              # Evelyn's UI
 backend/app/
-  routes/               # scans, tasks, images, identity
+  routes/               # scans, tasks, images, anonymous installation identity
   schemas/              # observation and response models
   db/                   # migrations and transactional persistence
   detection/            # model prompts, output validation
@@ -185,8 +186,8 @@ trigger.config.ts       # Python packaging configuration
 
 ## 11. Implementation order and validation
 
-1. Agree on API fixtures with Evelyn and build text extraction -> Python API -> Trigger.dev detection -> summary -> sidebar.
-2. Add manual tasks, tab navigation, recovery, and self-service onboarding.
+1. Agree on API fixtures with Evelyn and build BE-owned text extraction/service worker -> Python API -> Trigger.dev detection -> summary -> sidebar.
+2. Add manual tasks, tab navigation, recovery, and anonymous self-service onboarding.
 3. Evaluate multiple developer and personal pages, including pages with no task and insufficient information.
 4. Add optional screenshot fallback after text-path quality is measured. The core demo must work with screenshots disabled.
 5. Complete public distribution preparation and test per-owner access and deletion.
@@ -198,7 +199,6 @@ Evaluate model accuracy against sanitized fixtures rather than testing exact sum
 ## 12. Remaining decisions
 
 - FastAPI acceptance, database hosting, and model provider/model.
-- Auth0 versus an anonymous installation identity for initial public onboarding.
 - Initial host-permission scope and automatic refresh frequency.
 - Text extraction thresholds and when to offer the optional screenshot fallback, based on evaluation.
 
