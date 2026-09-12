@@ -22,6 +22,11 @@ pytest as separate jobs on pull requests and manual workflow dispatch. Google-st
 Python docstrings are required by [AGENTS.md](AGENTS.md); the CI tools do not
 check docstring style.
 
+The Vite sidebar can call the backend directly during local development. The API
+allows configured loopback CORS origins, including fallback Vite ports, and the
+sidebar recreates its anonymous installation credential once if a stored
+credential becomes stale after a local database reset.
+
 ## Current implementation
 
 The Python backend currently exposes anonymous installation onboarding,
@@ -57,7 +62,9 @@ should only happen after a user action for the active visible page.
 
 The extension middle layer and scan ingestion routes are implemented for the
 text-first path, including automatic event-driven collection and single-flight
-background submission. Trigger.dev wrappers and Python job entry points are
+background submission. The Vite-launched sidebar can connect directly to the
+local backend for development; the Chrome extension side panel connects through
+its service worker. Trigger.dev wrappers and Python job entry points are
 implemented for detection and summarization. Model-provider integration, image
 upload, and optional screenshot fallback are not implemented yet.
 

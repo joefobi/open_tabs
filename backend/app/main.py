@@ -5,7 +5,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 
+from backend.app.config import get_settings
 from backend.app.db.session import Database
 from backend.app.dependencies import get_database
 from backend.app.errors import http_exception_handler, validation_exception_handler
@@ -59,6 +61,14 @@ def create_app(database: Database | None = None) -> FastAPI:
         title="Browser Task Sidebar API",
         version="0.1.0",
         lifespan=lifespan,
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=get_settings().cors_origins,
+        allow_origin_regex=get_settings().cors_origin_regex,
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
     app.dependency_overrides[get_database] = database_override
     app.add_exception_handler(HTTPException, http_exception_handler)

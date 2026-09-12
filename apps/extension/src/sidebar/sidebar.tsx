@@ -1,15 +1,10 @@
 import { FormEvent, JSX, useCallback, useEffect, useState } from "react";
+import {
+  addManualTask,
+  listSidebarSnapshot,
+  openTaskSource,
+} from "./backendClient";
 import type { SidebarSnapshot, Task, TaskStatus } from "./types";
-
-interface BackendTask {
-  id: string;
-  origin: "detected" | "manual";
-  source_url: string | null;
-  title: string;
-  status: TaskStatus;
-  summary: string | null;
-  processing_state: "queued" | "running" | "ready" | "failed";
-}
 
 const statusLabel: Record<TaskStatus, string> = {
   action_complete: "Action Complete",
@@ -40,37 +35,6 @@ function normalizeSourceUrl(value: string): string | null {
   }
 }
 
-function send<T>(message: object): Promise<T> {
-  if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
-    const action = message as { type: string; title?: string; sourceUrl?: string | null };
-    if (action.type === "ADD_MANUAL_TASK" && action.title) browserPreview = { ...browserPreview, tasks: [...browserPreview.tasks, { id: crypto.randomUUID(), title: action.title, sourceUrl: action.sourceUrl ?? null, status: "in_progress", summary: "Added manually — no linked tab yet.", origin: "manual" }] };
-    return Promise.resolve(browserPreview as T);
-  }
-  return chrome.runtime.sendMessage(message).then((reply: { ok: boolean; response?: T; error?: { message?: string } }) => {
-    if (!reply.ok) throw new Error(reply.error?.message ?? "The extension request failed.");
-    return reply.response as T;
-  });
-}
-
-async function getSnapshot(): Promise<SidebarSnapshot> {
-  if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) return browserPreview;
-  const result = await send<{ tasks: BackendTask[] }>({ type: "LIST_TASKS" });
-  const tabs = await chrome.tabs.query({});
-  return {
-    tabCount: tabs.filter((tab) => tab.url?.startsWith("http")).length,
-    usingFallback: false,
-    tasks: result.tasks.map((task) => ({
-      id: task.id,
-      title: task.title,
-      sourceUrl: task.source_url,
-      status: task.status,
-      summary: task.summary ?? "Detecting task…",
-      origin: task.origin,
-      processingState: task.processing_state,
-    })),
-  };
-}
-
 function RadarIcon(): JSX.Element {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>;
 }
@@ -92,7 +56,7 @@ export function Sidebar(): JSX.Element {
   const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    try { setSnapshot(await getSnapshot()); }
+    try { setSnapshot(await listSidebarSnapshot()); }
     catch {
       setSnapshot({ ...browserPreview, tasks: [...browserPreview.tasks] });
       setNotice("Showing reliable demo tasks while the API reconnects.");
@@ -106,13 +70,13 @@ export function Sidebar(): JSX.Element {
     if (!title.trim()) return;
     const sourceUrl = normalizeSourceUrl(url);
     if (url.trim() && !sourceUrl) { setNotice("Enter a valid http(s) source URL."); return; }
-    await send({ type: "ADD_MANUAL_TASK", clientRequestId: crypto.randomUUID(), title: title.trim(), sourceUrl });
+    await addManualTask(title.trim(), sourceUrl);
     await refresh(); setTitle(""); setUrl(""); setIsAdding(false);
   };
 
-  const openTask = async (task: Task) => {
-    await send({ type: "OPEN_TASK_SOURCE", url: task.sourceUrl });
-    setNotice("Jumped to the source tab.");
+  const jumpToTask = async (task: Task) => {
+    const opened = await openTaskSource(task);
+    setNotice(opened ? "Jumped to the source tab." : "No source URL is available.");
   };
 
   return <main className="sidebar-shell">
@@ -132,7 +96,7 @@ export function Sidebar(): JSX.Element {
     <section className="task-list" aria-label="Detected tasks">
       {snapshot.tasks.map((task) => <article className={`card elev-sm task-card ${task.origin === "manual" ? "task-card--manual" : ""}`} key={task.id}>
         <div className="task-top"><div><h2 className={task.status === "action_complete" ? "complete" : ""}>{task.title}</h2><p className="source-label">{task.origin === "manual" ? "Manually added" : new URL(task.sourceUrl ?? "https://opentabs.local").hostname}</p></div>
-          {task.sourceUrl && <button className="btn btn-ghost btn-icon jump" aria-label={`Jump to ${task.title}`} onClick={() => void openTask(task)}><ExternalIcon /></button>}
+          {task.sourceUrl && <button className="btn btn-ghost btn-icon jump" aria-label={`Jump to ${task.title}`} onClick={() => void jumpToTask(task)}><ExternalIcon /></button>}
         </div>
         <div className="status-row"><StatusPill status={task.status} /><button className="btn btn-ghost summary-toggle" onClick={() => setExpanded((items) => ({ ...items, [task.id]: !items[task.id] }))}>{expanded[task.id] ? "Hide summary ˄" : "Show summary ˅"}</button></div>
         {expanded[task.id] && <p className="card-body summary">{task.summary}</p>}

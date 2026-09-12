@@ -27,6 +27,13 @@ let observationFlushTimer: ReturnType<typeof setTimeout> | undefined;
 let observationFlushInFlight = false;
 let observationFlushRequested = false;
 
+chrome.action.onClicked.addListener((tab) => {
+  void openSidePanel(tab).catch((error: unknown) => {
+    console.warn("Unable to open the OpenTabs side panel.", error);
+    void openExtensionPageFallback();
+  });
+});
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   void handleMessage(message)
     .then((response) => sendResponse({ ok: true, response }))
@@ -39,6 +46,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true;
 });
 
+configureSidePanel();
 registerObservationTriggers();
 
 void credentials
@@ -47,6 +55,50 @@ void credentials
   .catch((error: unknown) =>
     console.warn("Unable to start observation collection.", error),
   );
+
+async function openSidePanel(tab: { id?: number; windowId?: number }): Promise<void> {
+  // Open the side panel for the active browser window or tab.
+  if (tab.id !== undefined) {
+    await chrome.sidePanel.setOptions?.({
+      tabId: tab.id,
+      path: "index.html",
+      enabled: true,
+    });
+  }
+
+  if (tab.windowId !== undefined) {
+    await chrome.sidePanel.open({ windowId: tab.windowId });
+    return;
+  }
+  if (tab.id !== undefined) {
+    await chrome.sidePanel.open({ tabId: tab.id });
+  }
+}
+
+async function openExtensionPageFallback(): Promise<void> {
+  await chrome.tabs.create({
+    active: true,
+    url: chrome.runtime.getURL("index.html"),
+  });
+}
+
+function configureSidePanel(): void {
+  // Enable the side panel and let Chrome open it from the toolbar action.
+  const optionsPromise = chrome.sidePanel.setOptions?.({
+    path: "index.html",
+    enabled: true,
+  });
+  void optionsPromise?.catch((error: unknown) =>
+    console.warn("Unable to enable the OpenTabs side panel.", error),
+  );
+
+  const behaviorPromise = chrome.sidePanel.setPanelBehavior?.({
+    openPanelOnActionClick: true,
+  });
+  void behaviorPromise?.catch((error: unknown) =>
+    console.warn("Unable to configure the OpenTabs toolbar action.", error),
+  );
+}
 
 async function handleMessage(message: ExtensionMessage): Promise<unknown> {
   await credentials.ensureCredential(apiClient);
@@ -60,6 +112,7 @@ async function handleMessage(message: ExtensionMessage): Promise<unknown> {
       return apiClient.createManualTask({
         client_request_id: message.clientRequestId,
         title: message.title,
+        source_url: message.sourceUrl,
       });
     case "UPDATE_MANUAL_TASK":
       return apiClient.updateManualTask(message.taskId, message.patch);

@@ -179,6 +179,23 @@ def test_list_tasks_returns_empty_owner_scoped_response(
     assert body == _fixture("task_list_empty.example.json")
 
 
+def test_loopback_fallback_vite_ports_are_allowed_by_cors(
+    app_harness: AppHarness,
+) -> None:
+    """Verify direct browser development requests work on fallback Vite ports."""
+
+    response = app_harness.client.options(
+        "/v1/tasks",
+        headers={
+            "Origin": "http://localhost:5174",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5174"
+
+
 def test_list_tasks_is_scoped_to_authenticated_owner(
     app_harness: AppHarness,
 ) -> None:

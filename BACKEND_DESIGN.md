@@ -131,7 +131,7 @@ Proposed retention: expire raw text and screenshots after 24 hours; keep task su
 
 ## 8. API and frontend contract
 
-The sidebar sends typed extension messages to the service worker, which owns HTTP requests and credentials. Share OpenAPI-generated types or checked fixtures with Evelyn.
+In the installed extension, the sidebar sends typed extension messages to the service worker, which owns HTTP requests and credentials. In local Vite development, the sidebar may call the backend directly with an anonymous installation credential stored in browser local storage. Direct browser calls are limited to configured loopback CORS origins for development, and the client must discard a stale credential and mint a replacement after one unauthorized response. Share OpenAPI-generated types or checked fixtures with Evelyn.
 
 | Endpoint | Purpose |
 | --- | --- |
@@ -139,7 +139,7 @@ The sidebar sends typed extension messages to the service worker, which owns HTT
 | `POST /v1/scans` | Submit a service-worker ingestion batch with client request ID and observations; return `202 {scan_id, state}` after enqueue |
 | `GET /v1/scans/:id` | Return service-worker-visible processing counts, per-item outcomes, and errors |
 | `GET /v1/tasks` | Return owner-scoped task cards |
-| `POST /v1/tasks` | Idempotent manual add using client request ID and title |
+| `POST /v1/tasks` | Idempotent manual add using client request ID, title, and optional source URL |
 | `PATCH /v1/tasks/:id` | Edit manual task title/status |
 | `POST /v1/tasks/:id/retry` | Retry latest retained observation; request new collection if expired |
 | `POST /v1/images` | Optional authenticated bounded screenshot upload; return private image ID |
@@ -147,6 +147,8 @@ The sidebar sends typed extension messages to the service worker, which owns HTT
 | `DELETE /v1/data` | Clear the owner's task and observation data |
 
 Observation input: `{client_observation_id, source_url, title, observed_at, text, extraction_state, truncated, screenshot_id?}`. The backend derives source identity and content hashes. Validate image ownership. Local tab IDs are unnecessary in backend payloads.
+
+Manual task input: `{client_request_id, title, source_url?}`. Source URLs are optional and used only for return-to-source behavior.
 
 Task response: `{id, origin, source_key, source_url, type, title, status, status_reason, summary, processing_state, processing_error_code, observed_at, updated_at}`.
 

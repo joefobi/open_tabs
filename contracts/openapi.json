@@ -85,9 +85,10 @@
       },
       "ManualTaskCreateRequest": {
         "additionalProperties": false,
-        "description": "Request to create a manual task with an owner-scoped idempotency key.\n\nAttributes:\n    client_request_id: Client-generated idempotency key.\n    title: User-visible manual task title.",
+        "description": "Request to create a manual task with an owner-scoped idempotency key.\n\nAttributes:\n    client_request_id: Client-generated idempotency key.\n    title: User-visible manual task title.\n    source_url: Optional source URL used for return-to-tab behavior.",
         "example": {
           "client_request_id": "sidebar-manual-001",
+          "source_url": "https://github.com/example/open-tabs/pull/142",
           "title": "Review Yokohama tabs before standup"
         },
         "properties": {
@@ -96,6 +97,19 @@
             "minLength": 1,
             "title": "Client Request Id",
             "type": "string"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "format": "uri",
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
           },
           "title": {
             "maxLength": 200,
