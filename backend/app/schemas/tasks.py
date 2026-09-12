@@ -5,7 +5,7 @@ from enum import StrEnum
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
 
 TaskTitle = Annotated[str, Field(min_length=1, max_length=200)]
 ClientRequestId = Annotated[str, Field(min_length=1, max_length=120)]
@@ -102,6 +102,7 @@ class ManualTaskCreateRequest(BaseModel):
     Attributes:
         client_request_id: Client-generated idempotency key.
         title: User-visible manual task title.
+        source_url: Optional source URL used for return-to-tab behavior.
     """
 
     model_config = ConfigDict(
@@ -110,12 +111,14 @@ class ManualTaskCreateRequest(BaseModel):
             "example": {
                 "client_request_id": "sidebar-manual-001",
                 "title": "Review Yokohama tabs before standup",
+                "source_url": "https://github.com/example/open-tabs/pull/142",
             }
         },
     )
 
     client_request_id: ClientRequestId
     title: TaskTitle
+    source_url: AnyHttpUrl | None = None
 
 
 class ManualTaskPatchRequest(BaseModel):

@@ -108,6 +108,7 @@ def create_manual_task(
         origin=TaskOrigin.MANUAL.value,
         type=TaskType.MANUAL.value,
         title=request.title,
+        source_url=str(request.source_url) if request.source_url is not None else None,
         status=TaskStatus.IN_PROGRESS.value,
         summary=request.title,
         processing_state=ProcessingState.READY.value,

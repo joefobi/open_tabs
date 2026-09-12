@@ -27,6 +27,10 @@ let observationFlushTimer: ReturnType<typeof setTimeout> | undefined;
 let observationFlushInFlight = false;
 let observationFlushRequested = false;
 
+chrome.action.onClicked.addListener((tab) => {
+  void openSidePanel(tab);
+});
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   void handleMessage(message)
     .then((response) => sendResponse({ ok: true, response }))
@@ -40,6 +44,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 registerObservationTriggers();
+void chrome.sidePanel.setPanelBehavior?.({ openPanelOnActionClick: true });
 
 void credentials
   .ensureCredential(apiClient)
@@ -47,6 +52,17 @@ void credentials
   .catch((error: unknown) =>
     console.warn("Unable to start observation collection.", error),
   );
+
+async function openSidePanel(tab: { id?: number; windowId?: number }): Promise<void> {
+  // Open the side panel for the active browser window or tab.
+  if (tab.windowId !== undefined) {
+    await chrome.sidePanel.open({ windowId: tab.windowId });
+    return;
+  }
+  if (tab.id !== undefined) {
+    await chrome.sidePanel.open({ tabId: tab.id });
+  }
+}
 
 async function handleMessage(message: ExtensionMessage): Promise<unknown> {
   await credentials.ensureCredential(apiClient);
@@ -60,6 +76,7 @@ async function handleMessage(message: ExtensionMessage): Promise<unknown> {
       return apiClient.createManualTask({
         client_request_id: message.clientRequestId,
         title: message.title,
+        source_url: message.sourceUrl,
       });
     case "UPDATE_MANUAL_TASK":
       return apiClient.updateManualTask(message.taskId, message.patch);

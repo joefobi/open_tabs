@@ -99,6 +99,7 @@ def _create_task(
     *,
     client_request_id: str,
     title: str,
+    source_url: str | None = None,
 ) -> dict[str, Any]:
     """Create a manual task and return its response body.
 
@@ -107,15 +108,20 @@ def _create_task(
         credential: The owner bearer credential.
         client_request_id: The idempotency key for the request.
         title: The manual task title.
+        source_url: Optional source URL for return-to-source behavior.
 
     Returns:
         The task response body.
     """
 
+    payload: dict[str, Any] = {"client_request_id": client_request_id, "title": title}
+    if source_url is not None:
+        payload["source_url"] = source_url
+
     response = client.post(
         "/v1/tasks",
         headers=_headers(credential),
-        json={"client_request_id": client_request_id, "title": title},
+        json=payload,
     )
     assert response.status_code == 201
     return _json_body(response.json())
@@ -146,11 +152,13 @@ def test_manual_task_lifecycle_is_owner_scoped(app_harness: AppHarness) -> None:
         owner_credential,
         client_request_id="manual-001",
         title="Review sidebar integration",
+        source_url="https://github.com/example/open-tabs/pull/142",
     )
 
     assert created["origin"] == "manual"
     assert created["type"] == "manual"
     assert created["title"] == "Review sidebar integration"
+    assert created["source_url"] == "https://github.com/example/open-tabs/pull/142"
     assert created["status"] == "in_progress"
     assert created["summary"] == "Review sidebar integration"
     assert created["processing_state"] == "ready"

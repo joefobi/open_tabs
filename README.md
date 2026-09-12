@@ -57,7 +57,9 @@ should only happen after a user action for the active visible page.
 
 The extension middle layer and scan ingestion routes are implemented for the
 text-first path, including automatic event-driven collection and single-flight
-background submission. Trigger.dev wrappers and Python job entry points are
+background submission. The Vite-launched sidebar can connect directly to the
+local backend for development; the Chrome extension side panel connects through
+its service worker. Trigger.dev wrappers and Python job entry points are
 implemented for detection and summarization. Model-provider integration, image
 upload, and optional screenshot fallback are not implemented yet.
 

@@ -99,6 +99,7 @@ export interface TaskListResponse {
 export interface ManualTaskCreateRequest {
   client_request_id: string;
   title: string;
+  source_url?: string | null;
 }
 
 export interface ManualTaskPatchRequest {
@@ -151,6 +152,7 @@ export interface PendingScan {
 
 export interface ChromeTab {
   id?: number;
+  windowId?: number;
   url?: string;
   title?: string;
   status?: string;
@@ -168,6 +170,9 @@ export interface ChromeEvent<TCallback> {
 }
 
 export interface ChromeApi {
+  action: {
+    onClicked: ChromeEvent<(tab: ChromeTab) => void>;
+  };
   alarms?: {
     create(
       name: string,
@@ -187,6 +192,10 @@ export interface ChromeApi {
       ): void;
     };
     onStartup?: ChromeEvent<() => void>;
+  };
+  sidePanel: {
+    open(options: { tabId?: number; windowId?: number }): Promise<void>;
+    setPanelBehavior?(behavior: { openPanelOnActionClick: boolean }): Promise<void>;
   };
   scripting: {
     executeScript<T>(details: {
@@ -221,7 +230,7 @@ export interface ChromeApi {
 export type ExtensionMessage =
   | { type: "GET_SCAN"; scanId: string }
   | { type: "LIST_TASKS" }
-  | { type: "ADD_MANUAL_TASK"; clientRequestId: string; title: string }
+  | { type: "ADD_MANUAL_TASK"; clientRequestId: string; title: string; sourceUrl?: string | null }
   | { type: "UPDATE_MANUAL_TASK"; taskId: string; patch: ManualTaskPatchRequest }
   | { type: "DELETE_TASK"; taskId: string }
   | { type: "CLEAR_DATA" }

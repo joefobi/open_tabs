@@ -17,7 +17,8 @@
       "properties": {
         "type": { "const": "ADD_MANUAL_TASK" },
         "clientRequestId": { "type": "string", "minLength": 1 },
-        "title": { "type": "string", "minLength": 1 }
+        "title": { "type": "string", "minLength": 1 },
+        "sourceUrl": { "type": ["string", "null"], "format": "uri" }
       },
       "additionalProperties": false
     },
