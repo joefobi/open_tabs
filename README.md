@@ -48,9 +48,9 @@ Tests cover the anonymous identity boundary, manual task lifecycle, idempotent
 manual creation, validation errors, owner isolation, clear-data behavior, and
 OpenAPI contract freshness.
 
-The extension middle layer, scan ingestion routes, Trigger.dev workflows,
-model-backed detection, summarization, image upload, and optional screenshot
-fallback are not implemented yet.
+The extension middle layer and scan ingestion routes are implemented for the
+text-first path. Trigger.dev workflows, model-backed detection, summarization,
+image upload, and optional screenshot fallback are not implemented yet.
 
 ## Layout
 

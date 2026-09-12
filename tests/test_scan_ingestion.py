@@ -5,13 +5,18 @@ from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
-from backend.app.db.models import Observation
+from backend.app.db.models import Observation, Owner
 from backend.app.db.session import Database
 from backend.app.main import create_app
+from backend.app.routes import scans
+from backend.app.schemas.scans import ScanCreateRequest, ScanCreateResponse, ScanState
 
 
 @dataclass(frozen=True)
@@ -145,6 +150,52 @@ def test_conflicting_client_observation_id_is_rejected(
     assert conflict.json()["error"]["code"] == "invalid_request"
 
 
+def test_scan_create_retries_source_integrity_race(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Retry a valid scan once after losing a concurrent source insert race.
+
+    Args:
+        monkeypatch: Pytest helper used to simulate the transient integrity race.
+    """
+
+    request = ScanCreateRequest.model_validate(_fixture_request())
+    expected = ScanCreateResponse(scan_id=uuid4(), state=ScanState.QUEUED)
+    session = _RollbackOnlySession()
+    calls = 0
+
+    def fake_create_once(
+        _: ScanCreateRequest,
+        __: Owner,
+        ___: Session,
+    ) -> ScanCreateResponse:
+        """Raise once, then return the expected scan response."""
+
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise IntegrityError("insert source", None, ValueError("source race"))
+        return expected
+
+    def fake_existing_scan(
+        _: Session,
+        __: Owner,
+        ___: ScanCreateRequest,
+    ) -> None:
+        """Return no idempotent scan while simulating a source race."""
+
+        return None
+
+    monkeypatch.setattr(scans, "_create_scan_once", fake_create_once)
+    monkeypatch.setattr(scans, "_scan_by_client_request_id", fake_existing_scan)
+
+    result = scans.create_scan(request, cast(Owner, object()), cast(Session, session))
+
+    assert result == expected
+    assert calls == 2
+    assert session.rollback_count == 1
+
+
 def test_owner_cannot_read_another_owner_scan(app_harness: AppHarness) -> None:
     """A scan lookup is scoped to the authenticated owner."""
 
@@ -223,6 +274,24 @@ def _headers(credential: str) -> dict[str, str]:
     """
 
     return {"Authorization": f"Bearer {credential}"}
+
+
+class _RollbackOnlySession:
+    """Minimal fake session for retry-path unit coverage.
+
+    Attributes:
+        rollback_count: Number of times rollback was called.
+    """
+
+    def __init__(self) -> None:
+        """Initialize the fake session."""
+
+        self.rollback_count = 0
+
+    def rollback(self) -> None:
+        """Record a rollback call."""
+
+        self.rollback_count += 1
 
 
 def _fixture_request(

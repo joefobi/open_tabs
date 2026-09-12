@@ -51,50 +51,24 @@ def create_scan(
         HTTPException: Raised when an observation or screenshot reference is invalid.
     """
 
-    existing = session.scalar(
-        select(Scan).where(
-            Scan.owner_id == owner.id,
-            Scan.client_request_id == request.client_request_id,
-        )
-    )
-    if existing is not None:
-        return ScanCreateResponse(
-            scan_id=UUID(existing.id), state=ScanState(existing.state)
-        )
+    for attempt in range(2):
+        try:
+            return _create_scan_once(request, owner, session)
+        except IntegrityError as exc:
+            session.rollback()
+            existing = _scan_by_client_request_id(session, owner, request)
+            if existing is not None:
+                return ScanCreateResponse(
+                    scan_id=UUID(existing.id), state=ScanState(existing.state)
+                )
+            if attempt == 0:
+                continue
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Scan conflicts with existing owner-scoped idempotency data.",
+            ) from exc
 
-    try:
-        scan = Scan(
-            owner_id=owner.id,
-            client_request_id=request.client_request_id,
-            state=ScanState.QUEUED.value,
-        )
-        session.add(scan)
-        session.flush()
-
-        for observation in request.observations:
-            _ingest_observation(session, owner, scan, observation)
-
-        _refresh_scan_counts(session, scan)
-        session.commit()
-        session.refresh(scan)
-    except IntegrityError as exc:
-        session.rollback()
-        existing = session.scalar(
-            select(Scan).where(
-                Scan.owner_id == owner.id,
-                Scan.client_request_id == request.client_request_id,
-            )
-        )
-        if existing is not None:
-            return ScanCreateResponse(
-                scan_id=UUID(existing.id), state=ScanState(existing.state)
-            )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Scan conflicts with existing owner-scoped idempotency data.",
-        ) from exc
-
-    return ScanCreateResponse(scan_id=UUID(scan.id), state=ScanState(scan.state))
+    raise RuntimeError("Scan retry loop exited unexpectedly.")
 
 
 @router.get("/{scan_id}", response_model=ScanResponse)
@@ -126,6 +100,73 @@ def get_scan(
         )
 
     return _scan_response(session, scan)
+
+
+def _create_scan_once(
+    request: ScanCreateRequest,
+    owner: Owner,
+    session: Session,
+) -> ScanCreateResponse:
+    """Create or replay a scan within one transaction attempt.
+
+    Args:
+        request: Scan request from the extension service worker.
+        owner: Authenticated owner resolved from bearer credentials.
+        session: Database session used to persist scan state.
+
+    Returns:
+        Accepted scan identifier and aggregate state.
+
+    Raises:
+        IntegrityError: Raised when a concurrent unique constraint race is lost.
+        HTTPException: Raised when the request conflicts with existing observations.
+    """
+
+    existing = _scan_by_client_request_id(session, owner, request)
+    if existing is not None:
+        return ScanCreateResponse(
+            scan_id=UUID(existing.id), state=ScanState(existing.state)
+        )
+
+    scan = Scan(
+        owner_id=owner.id,
+        client_request_id=request.client_request_id,
+        state=ScanState.QUEUED.value,
+    )
+    session.add(scan)
+    session.flush()
+
+    for observation in request.observations:
+        _ingest_observation(session, owner, scan, observation)
+
+    _refresh_scan_counts(session, scan)
+    session.commit()
+    session.refresh(scan)
+    return ScanCreateResponse(scan_id=UUID(scan.id), state=ScanState(scan.state))
+
+
+def _scan_by_client_request_id(
+    session: Session,
+    owner: Owner,
+    request: ScanCreateRequest,
+) -> Scan | None:
+    """Return an existing owner-scoped scan with the client request ID.
+
+    Args:
+        session: Database session used to load the scan.
+        owner: Authenticated owner that owns the scan.
+        request: Request carrying the client idempotency key.
+
+    Returns:
+        Existing scan row or None.
+    """
+
+    return session.scalar(
+        select(Scan).where(
+            Scan.owner_id == owner.id,
+            Scan.client_request_id == request.client_request_id,
+        )
+    )
 
 
 def _ingest_observation(
