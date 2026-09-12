@@ -68,6 +68,17 @@ def _service_worker_message_cases() -> set[str]:
     return set(re.findall(r'case "([^"]+)":', source))
 
 
+def _extension_manifest() -> dict[str, Any]:
+    """Load the extension manifest.
+
+    Returns:
+        The extension manifest as a dictionary.
+    """
+
+    manifest_path = Path("apps/extension/manifest.json")
+    return cast(dict[str, Any], json.loads(manifest_path.read_text()))
+
+
 def test_openapi_contract_is_fresh() -> None:
     """Verify the committed OpenAPI contract matches the application schema."""
 
@@ -126,3 +137,27 @@ def test_extension_submits_only_changed_observations() -> None:
     assert "palenque.submittedObservations" in observation_state
     assert "queuedFingerprints" in observation_state
     assert "sourceKeyForUrl" in observation_state
+
+
+def test_extension_toolbar_action_opens_side_panel() -> None:
+    """Verify the toolbar action does not bypass side-panel click handling."""
+
+    manifest = _extension_manifest()
+    action = cast(dict[str, Any], manifest["action"])
+    service_worker = Path(
+        "apps/extension/src/background/service-worker.ts",
+    ).read_text()
+
+    assert "default_popup" not in action
+    assert "chrome.action.onClicked.addListener" in service_worker
+    assert "chrome.sidePanel.open" in service_worker
+
+
+def test_sidebar_backend_client_recovers_stale_credentials() -> None:
+    """Verify the direct backend client retries once after stale credentials."""
+
+    source = Path("apps/extension/src/sidebar/backendClient.ts").read_text()
+
+    assert "response.status === 401" in source
+    assert "window.localStorage.removeItem(CREDENTIAL_KEY)" in source
+    assert "return request<T>(path, options, false);" in source

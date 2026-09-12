@@ -22,6 +22,11 @@ pytest as separate jobs on pull requests and manual workflow dispatch. Google-st
 Python docstrings are required by [AGENTS.md](AGENTS.md); the CI tools do not
 check docstring style.
 
+The Vite sidebar can call the backend directly during local development. The API
+allows configured loopback CORS origins, including fallback Vite ports, and the
+sidebar recreates its anonymous installation credential once if a stored
+credential becomes stale after a local database reset.
+
 ## Current implementation
 
 The Python backend currently exposes anonymous installation onboarding,

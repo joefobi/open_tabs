@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     Attributes:
         database_url: SQLAlchemy database URL used by the API.
         cors_origins: Browser origins allowed to call the API directly.
+        cors_origin_regex: Regex for loopback development origins.
     """
 
     model_config = SettingsConfigDict(env_prefix="OPEN_TABS_")
@@ -22,6 +23,9 @@ class Settings(BaseSettings):
             "http://localhost:5173",
             "http://127.0.0.1:5173",
         ]
+    )
+    cors_origin_regex: str | None = Field(
+        default=r"^http://(localhost|127\.0\.0\.1):[0-9]+$",
     )
 
 

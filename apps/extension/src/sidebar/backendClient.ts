@@ -98,6 +98,7 @@ async function sendToBackend<T>(message: Record<string, unknown>): Promise<T> {
 async function request<T>(
   path: string,
   options: { method?: "GET" | "POST"; body?: Record<string, unknown> } = {},
+  retryStaleCredential = true,
 ): Promise<T> {
   const credential = await ensureCredential();
   const headers = new Headers({
@@ -115,6 +116,10 @@ async function request<T>(
   });
   const text = await response.text();
   const payload = text ? JSON.parse(text) as unknown : null;
+  if (response.status === 401 && retryStaleCredential) {
+    window.localStorage.removeItem(CREDENTIAL_KEY);
+    return request<T>(path, options, false);
+  }
   if (!response.ok) {
     throw new Error(errorMessage(payload));
   }
