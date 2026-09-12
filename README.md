@@ -28,6 +28,8 @@ The Python backend currently exposes anonymous installation onboarding,
 structured error responses, and owner-scoped manual task endpoints:
 
 - `POST /v1/installations`
+- `POST /v1/scans`
+- `GET /v1/scans/{scan_id}`
 - `GET /v1/tasks`
 - `POST /v1/tasks`
 - `PATCH /v1/tasks/{task_id}`
