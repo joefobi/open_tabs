@@ -10,7 +10,7 @@ import type { ChromeApi, ExtensionMessage } from "./types";
 
 declare const chrome: ChromeApi;
 
-const DEFAULT_API_BASE_URL = "http://localhost:8000";
+const DEFAULT_API_BASE_URL = import.meta.env.VITE_OPEN_TABS_API_BASE_URL ?? "http://localhost:8000";
 const OBSERVATION_FLUSH_DEBOUNCE_MS = 2_000;
 const OBSERVATION_REFRESH_ALARM = "refreshChangedObservations";
 const OBSERVATION_REFRESH_MINUTES = 5;

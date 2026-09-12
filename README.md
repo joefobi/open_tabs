@@ -38,6 +38,15 @@ npm install
 npm run build
 ```
 
+If port 8000 is already in use, start the API on another loopback port and pass
+that URL into the extension build:
+
+```sh
+uv run uvicorn backend.app.main:app --host 127.0.0.1 --port 8001
+cd apps/extension
+VITE_OPEN_TABS_API_BASE_URL=http://127.0.0.1:8001 npm run build
+```
+
 Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**,
 then select:
 
