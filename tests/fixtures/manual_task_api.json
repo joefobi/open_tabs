@@ -1,0 +1,11 @@
+{
+  "create": {
+    "client_request_id": "sidebar-manual-001",
+    "title": "Review Yokohama tabs before standup"
+  },
+  "patch": {
+    "status": "action_complete",
+    "status_reason": "Marked complete by the user.",
+    "title": "Review Yokohama tabs after lunch"
+  }
+}

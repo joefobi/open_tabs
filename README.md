@@ -9,6 +9,7 @@ Install Python 3.12+ and uv, then run:
 
 ```sh
 uv sync --locked
+uv run uvicorn backend.app.main:app --reload
 uv run --locked black --check .
 uv run --locked isort --check-only .
 uv run --locked mypy .
@@ -17,7 +18,19 @@ uv run --locked mypy .
 Apply formatting with `uv run isort .` followed by `uv run black .`.
 Commit `uv.lock` when updating dependencies. CI runs the same checks on Python 3.12
 for pushes and pull requests. Google-style Python docstrings are required by
-[CLAUDE.md](CLAUDE.md); the three CI tools do not check docstring style.
+[AGENTS.md](AGENTS.md); the three CI tools do not check docstring style.
+
+The API currently exposes anonymous installation onboarding and owner-scoped
+manual task endpoints:
+
+- `POST /v1/installations`
+- `GET /v1/tasks`
+- `POST /v1/tasks`
+- `PATCH /v1/tasks/{task_id}`
+- `DELETE /v1/tasks/{task_id}`
+- `DELETE /v1/data`
+
+The checked-in OpenAPI contract lives at `contracts/openapi.json`.
 
 ## Layout
 
@@ -33,7 +46,6 @@ for pushes and pull requests. Google-style Python docstrings are required by
 - `backend/jobs/`: Python background-job entry points.
 - `contracts/`: shared OpenAPI and extension message contracts.
 - `trigger/`: TypeScript wrappers for Python jobs.
-- `tests/fixtures/`: sanitized page observations and expected outcomes.
+- `tests/fixtures/`: sanitized API/page observations and expected outcomes.
 
-This is a folder and tooling scaffold. No runnable API, extension, or Trigger.dev
-integration is implemented yet.
+Extension and Trigger.dev integration are not implemented yet.
