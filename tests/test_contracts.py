@@ -94,3 +94,30 @@ def test_extension_message_contract_matches_implemented_messages() -> None:
     assert "SCAN_NOW" not in message_types
     assert message_types == _typescript_extension_message_types()
     assert message_types == _service_worker_message_cases()
+
+
+def test_extension_observation_flushes_are_single_flight() -> None:
+    """Verify automatic observation flush scheduling cannot overlap submissions."""
+
+    source = Path("apps/extension/src/background/service-worker.ts").read_text()
+
+    assert "let observationFlushInFlight = false;" in source
+    assert "let observationFlushRequested = false;" in source
+    assert "void drainObservationFlush();" in source
+    assert "void flushChangedObservations();" not in source
+    assert ".then(() => orchestrator.retryPending())" not in source
+
+
+def test_extension_submits_only_changed_observations() -> None:
+    """Verify extension submissions skip pages already submitted successfully."""
+
+    orchestrator = Path("apps/extension/src/background/scanOrchestrator.ts").read_text()
+    observation_state = Path(
+        "apps/extension/src/background/observationState.ts",
+    ).read_text()
+
+    assert "filterChanged(pages)" in orchestrator
+    assert "no_changed_observations" in orchestrator
+    assert "markSubmittedPages(changedPages)" in orchestrator
+    assert "palenque.submittedObservations" in observation_state
+    assert "sourceKeyForUrl" in observation_state

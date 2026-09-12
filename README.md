@@ -50,14 +50,16 @@ OpenAPI contract freshness.
 
 The intended extension collection model is automatic page-text observation from
 permitted HTTP(S) pages as the user visits, activates, or navigates tabs. The
-service worker will flush changed observations to the backend as internal scan
-batches. Screenshots are not automatic or periodic; optional screenshot fallback
+service worker flushes changed observations to the backend as internal scan
+batches, using persisted content fingerprints to avoid resubmitting unchanged
+pages. Screenshots are not automatic or periodic; optional screenshot fallback
 should only happen after a user action for the active visible page.
 
 The extension middle layer and scan ingestion routes are implemented for the
-text-first path. Automatic event-driven collection, Trigger.dev workflows,
-model-backed detection, summarization, image upload, and optional screenshot
-fallback are not implemented yet.
+text-first path, including automatic event-driven collection and single-flight
+background submission. Trigger.dev workflows, model-backed detection,
+summarization, image upload, and optional screenshot fallback are not
+implemented yet.
 
 ## Layout
 

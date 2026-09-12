@@ -133,12 +133,19 @@ export interface CollectedPage {
   errorCode?: string;
 }
 
+export interface ObservationFingerprint {
+  sourceKey: string;
+  contentHash: string;
+  submittedAt?: string;
+}
+
 export interface PendingScan {
   clientRequestId: string;
   body: ScanCreateRequest;
   createdAt: string;
   lastAttemptAt?: string;
   scanId?: string;
+  observationFingerprints?: ObservationFingerprint[];
   state: "pending" | "submitted";
 }
 

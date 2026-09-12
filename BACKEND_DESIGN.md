@@ -57,7 +57,7 @@ Use URL/title alone for a broad hint if extraction fails, but do not infer detai
 
 Collect page text opportunistically after navigation, tab activation, and meaningful content changes, with a low-frequency periodic refresh for active/open permitted pages. Proposed content-change debounce: two seconds. Proposed periodic refresh: every five minutes while the browser is active, with measurement before increasing frequency. Hash normalized content plus URL/title to skip unchanged observations. Persist pending submissions and cached cards in extension storage so worker restarts do not lose them. Reference: [Chrome service worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle).
 
-A backend `Scan` is an idempotent ingestion batch created by the service worker when it flushes one or more changed observations. The sidebar should display task freshness, processing state, and collection gaps rather than a scan-centric workflow.
+A backend `Scan` is an idempotent ingestion batch created by the service worker when it flushes one or more changed observations. The service worker should serialize flushes and persist the latest submitted content fingerprint for each source, so overlapping browser events and periodic refreshes do not create duplicate scans for unchanged pages. The sidebar should display task freshness, processing state, and collection gaps rather than a scan-centric workflow.
 
 ## 4. Optional screenshot fallback
 
@@ -205,4 +205,4 @@ Evaluate model accuracy against sanitized fixtures rather than testing exact sum
 - Initial host-permission scope and automatic refresh frequency.
 - Text extraction thresholds and when to offer the optional screenshot fallback, based on evaluation.
 
-The primary collection approach is settled: page text + URL/title first. Backend foundation, manual task APIs, extension middle layer, and scan ingestion exist for the text-first path. Automatic event-driven collection, Trigger.dev workflows, model-backed detection, summarization, image upload, and screenshot fallback remain to be implemented.
+The primary collection approach is settled: page text + URL/title first. Backend foundation, manual task APIs, extension middle layer, scan ingestion, and automatic event-driven collection exist for the text-first path. Trigger.dev workflows, model-backed detection, summarization, image upload, and screenshot fallback remain to be implemented.

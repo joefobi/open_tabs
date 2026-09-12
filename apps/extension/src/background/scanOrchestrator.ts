@@ -1,17 +1,28 @@
 /** Coordinate tab scanning, pending persistence, and scan submission. */
 
 import type { ApiClient } from "./apiClient";
+import {
+  ObservationStateStore,
+  toObservationFingerprint,
+} from "./observationState";
 import type { PendingSubmissionStore } from "./pendingSubmissions";
 import type { TabScanner } from "./tabScanner";
 import type { CollectedPage, ObservationPayload, ScanAcceptedResponse, ScanCreateRequest } from "./types";
 
 export class ScanOrchestrator {
   private readonly apiClient: ApiClient;
+  private readonly observationStateStore: ObservationStateStore;
   private readonly pendingStore: PendingSubmissionStore;
   private readonly tabScanner: TabScanner;
 
-  constructor(apiClient: ApiClient, pendingStore: PendingSubmissionStore, tabScanner: TabScanner) {
+  constructor(
+    apiClient: ApiClient,
+    pendingStore: PendingSubmissionStore,
+    tabScanner: TabScanner,
+    observationStateStore: ObservationStateStore,
+  ) {
     this.apiClient = apiClient;
+    this.observationStateStore = observationStateStore;
     this.pendingStore = pendingStore;
     this.tabScanner = tabScanner;
   }
@@ -26,11 +37,24 @@ export class ScanOrchestrator {
       );
     }
 
-    const body = buildScanRequest(pages);
-    await this.pendingStore.upsertPending(body);
+    const changedPages = await this.observationStateStore.filterChanged(pages);
+    if (changedPages.length === 0) {
+      throw new ExtensionRuntimeError(
+        "no_changed_observations",
+        "Open HTTP(S) tabs have not changed since the last successful submission.",
+        false,
+      );
+    }
+
+    const body = buildScanRequest(changedPages);
+    await this.pendingStore.upsertPending(
+      body,
+      changedPages.map(toObservationFingerprint),
+    );
     await this.pendingStore.markAttempt(body.client_request_id);
     const response = await this.apiClient.createScan(body);
     await this.pendingStore.markSubmitted(body.client_request_id, response);
+    await this.observationStateStore.markSubmittedPages(changedPages);
     return response;
   }
 
@@ -41,6 +65,9 @@ export class ScanOrchestrator {
       await this.pendingStore.markAttempt(scan.clientRequestId);
       const response = await this.apiClient.createScan(scan.body);
       await this.pendingStore.markSubmitted(scan.clientRequestId, response);
+      await this.observationStateStore.markSubmittedFingerprints(
+        scan.observationFingerprints ?? [],
+      );
       responses.push(response);
     }
     return responses;

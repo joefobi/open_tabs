@@ -2,6 +2,7 @@
 
 import { ApiClient } from "./apiClient";
 import { CredentialStore } from "./credentials";
+import { ObservationStateStore } from "./observationState";
 import { PendingSubmissionStore } from "./pendingSubmissions";
 import { ExtensionRuntimeError, ScanOrchestrator } from "./scanOrchestrator";
 import { TabScanner } from "./tabScanner";
@@ -16,8 +17,15 @@ const OBSERVATION_REFRESH_MINUTES = 5;
 
 const credentials = new CredentialStore();
 const apiClient = new ApiClient(DEFAULT_API_BASE_URL, () => credentials.getToken());
-const orchestrator = new ScanOrchestrator(apiClient, new PendingSubmissionStore(), new TabScanner());
+const orchestrator = new ScanOrchestrator(
+  apiClient,
+  new PendingSubmissionStore(),
+  new TabScanner(),
+  new ObservationStateStore(),
+);
 let observationFlushTimer: ReturnType<typeof setTimeout> | undefined;
+let observationFlushInFlight = false;
+let observationFlushRequested = false;
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   void handleMessage(message)
@@ -35,7 +43,6 @@ registerObservationTriggers();
 
 void credentials
   .ensureCredential(apiClient)
-  .then(() => orchestrator.retryPending())
   .then(() => scheduleObservationFlush())
   .catch((error: unknown) =>
     console.warn("Unable to start observation collection.", error),
@@ -91,14 +98,35 @@ function registerObservationTriggers(): void {
 }
 
 function scheduleObservationFlush(): void {
+  observationFlushRequested = true;
+
   if (observationFlushTimer !== undefined) {
     clearTimeout(observationFlushTimer);
   }
 
   observationFlushTimer = setTimeout(() => {
     observationFlushTimer = undefined;
-    void flushChangedObservations();
+    void drainObservationFlush();
   }, OBSERVATION_FLUSH_DEBOUNCE_MS);
+}
+
+async function drainObservationFlush(): Promise<void> {
+  if (observationFlushInFlight) {
+    return;
+  }
+
+  observationFlushInFlight = true;
+  try {
+    while (observationFlushRequested) {
+      observationFlushRequested = false;
+      await flushChangedObservations();
+    }
+  } finally {
+    observationFlushInFlight = false;
+    if (observationFlushRequested && observationFlushTimer === undefined) {
+      scheduleObservationFlush();
+    }
+  }
 }
 
 async function flushChangedObservations(): Promise<void> {
@@ -107,7 +135,11 @@ async function flushChangedObservations(): Promise<void> {
     await orchestrator.retryPending();
     await orchestrator.submitOpenTabObservations();
   } catch (error: unknown) {
-    if (error instanceof ExtensionRuntimeError && error.code === "no_scannable_tabs") {
+    if (
+      error instanceof ExtensionRuntimeError &&
+      (error.code === "no_scannable_tabs" ||
+        error.code === "no_changed_observations")
+    ) {
       return;
     }
     console.warn("Unable to flush changed observations.", error);
