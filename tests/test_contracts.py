@@ -1,6 +1,7 @@
 """Tests for generated API contracts."""
 
 import json
+import re
 from pathlib import Path
 from typing import Any, cast
 
@@ -29,6 +30,44 @@ def _extension_message_schema() -> dict[str, Any]:
     return cast(dict[str, Any], json.loads(contract_path.read_text()))
 
 
+def _extension_schema_message_types() -> set[str]:
+    """Return message types declared by the extension message JSON schema.
+
+    Returns:
+        Message type constants from the JSON schema variants.
+    """
+
+    schema = _extension_message_schema()
+    variants = cast(list[dict[str, Any]], schema["oneOf"])
+    return {
+        cast(str, cast(dict[str, Any], variant["properties"])["type"]["const"])
+        for variant in variants
+    }
+
+
+def _typescript_extension_message_types() -> set[str]:
+    """Return message types declared by the TypeScript union.
+
+    Returns:
+        Message type constants from the ExtensionMessage union.
+    """
+
+    source = Path("apps/extension/src/background/types.ts").read_text()
+    union = source.split("export type ExtensionMessage =", maxsplit=1)[1]
+    return set(re.findall(r'\|\s*\{\s*type: "([^"]+)"', union))
+
+
+def _service_worker_message_cases() -> set[str]:
+    """Return message types handled by the service worker dispatcher.
+
+    Returns:
+        Message type constants from switch cases in the dispatcher.
+    """
+
+    source = Path("apps/extension/src/background/service-worker.ts").read_text()
+    return set(re.findall(r'case "([^"]+)":', source))
+
+
 def test_openapi_contract_is_fresh() -> None:
     """Verify the committed OpenAPI contract matches the application schema."""
 
@@ -48,21 +87,10 @@ def test_openapi_contract_contains_foundation_endpoints() -> None:
 
 
 def test_extension_message_contract_matches_implemented_messages() -> None:
-    """Verify the extension message contract lists implemented message types."""
+    """Verify extension message schema, types, and dispatcher stay aligned."""
 
-    schema = _extension_message_schema()
-    variants = cast(list[dict[str, Any]], schema["oneOf"])
-    message_types = {
-        cast(str, cast(dict[str, Any], variant["properties"])["type"]["const"])
-        for variant in variants
-    }
+    message_types = _extension_schema_message_types()
 
-    assert message_types == {
-        "ADD_MANUAL_TASK",
-        "CLEAR_DATA",
-        "DELETE_TASK",
-        "GET_SCAN",
-        "LIST_TASKS",
-        "OPEN_TASK_SOURCE",
-        "UPDATE_MANUAL_TASK",
-    }
+    assert "SCAN_NOW" not in message_types
+    assert message_types == _typescript_extension_message_types()
+    assert message_types == _service_worker_message_cases()

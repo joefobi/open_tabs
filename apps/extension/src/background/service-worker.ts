@@ -3,17 +3,21 @@
 import { ApiClient } from "./apiClient";
 import { CredentialStore } from "./credentials";
 import { PendingSubmissionStore } from "./pendingSubmissions";
-import { ScanOrchestrator } from "./scanOrchestrator";
+import { ExtensionRuntimeError, ScanOrchestrator } from "./scanOrchestrator";
 import { TabScanner } from "./tabScanner";
 import type { ChromeApi, ExtensionMessage } from "./types";
 
 declare const chrome: ChromeApi;
 
 const DEFAULT_API_BASE_URL = "http://localhost:8000";
+const OBSERVATION_FLUSH_DEBOUNCE_MS = 2_000;
+const OBSERVATION_REFRESH_ALARM = "refreshChangedObservations";
+const OBSERVATION_REFRESH_MINUTES = 5;
 
 const credentials = new CredentialStore();
 const apiClient = new ApiClient(DEFAULT_API_BASE_URL, () => credentials.getToken());
 const orchestrator = new ScanOrchestrator(apiClient, new PendingSubmissionStore(), new TabScanner());
+let observationFlushTimer: ReturnType<typeof setTimeout> | undefined;
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   void handleMessage(message)
@@ -27,7 +31,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true;
 });
 
-void credentials.ensureCredential(apiClient).then(() => orchestrator.retryPending());
+registerObservationTriggers();
+
+void credentials
+  .ensureCredential(apiClient)
+  .then(() => orchestrator.retryPending())
+  .then(() => scheduleObservationFlush())
+  .catch((error: unknown) =>
+    console.warn("Unable to start observation collection.", error),
+  );
 
 async function handleMessage(message: ExtensionMessage): Promise<unknown> {
   await credentials.ensureCredential(apiClient);
@@ -51,6 +63,54 @@ async function handleMessage(message: ExtensionMessage): Promise<unknown> {
       return apiClient.clearData();
     case "OPEN_TASK_SOURCE":
       return openTaskSource(message.tabId, message.url);
+  }
+}
+
+function registerObservationTriggers(): void {
+  chrome.runtime.onInstalled?.addListener(() => scheduleObservationFlush());
+  chrome.runtime.onStartup?.addListener(() => scheduleObservationFlush());
+  chrome.alarms?.create(OBSERVATION_REFRESH_ALARM, {
+    delayInMinutes: OBSERVATION_REFRESH_MINUTES,
+    periodInMinutes: OBSERVATION_REFRESH_MINUTES,
+  });
+  chrome.alarms?.onAlarm.addListener((alarm) => {
+    if (alarm.name === OBSERVATION_REFRESH_ALARM) {
+      scheduleObservationFlush();
+    }
+  });
+  chrome.tabs.onActivated?.addListener(() => scheduleObservationFlush());
+  chrome.tabs.onUpdated?.addListener((_tabId, changeInfo, tab) => {
+    if (
+      changeInfo.status === "complete" ||
+      changeInfo.url !== undefined ||
+      tab.status === "complete"
+    ) {
+      scheduleObservationFlush();
+    }
+  });
+}
+
+function scheduleObservationFlush(): void {
+  if (observationFlushTimer !== undefined) {
+    clearTimeout(observationFlushTimer);
+  }
+
+  observationFlushTimer = setTimeout(() => {
+    observationFlushTimer = undefined;
+    void flushChangedObservations();
+  }, OBSERVATION_FLUSH_DEBOUNCE_MS);
+}
+
+async function flushChangedObservations(): Promise<void> {
+  try {
+    await credentials.ensureCredential(apiClient);
+    await orchestrator.retryPending();
+    await orchestrator.submitOpenTabObservations();
+  } catch (error: unknown) {
+    if (error instanceof ExtensionRuntimeError && error.code === "no_scannable_tabs") {
+      return;
+    }
+    console.warn("Unable to flush changed observations.", error);
   }
 }
 
