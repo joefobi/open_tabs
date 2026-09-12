@@ -2,7 +2,8 @@
   "components": {
     "schemas": {
       "ClearDataResponse": {
-        "description": "Report owner-scoped data deletion counts.",
+        "additionalProperties": false,
+        "description": "Response returned after clearing owner-scoped data.\n\nAttributes:\n    deleted_tasks: Number of task rows deleted.",
         "properties": {
           "deleted_tasks": {
             "title": "Deleted Tasks",
@@ -15,81 +16,65 @@
         "title": "ClearDataResponse",
         "type": "object"
       },
-      "ErrorBody": {
-        "description": "Describe a machine-readable API error.",
+      "HTTPValidationError": {
         "properties": {
-          "code": {
-            "title": "Code",
-            "type": "string"
-          },
-          "message": {
-            "title": "Message",
-            "type": "string"
-          },
-          "retryable": {
-            "title": "Retryable",
-            "type": "boolean"
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
           }
         },
-        "required": [
-          "code",
-          "message",
-          "retryable"
-        ],
-        "title": "ErrorBody",
+        "title": "HTTPValidationError",
         "type": "object"
       },
-      "ErrorResponse": {
-        "description": "Wrap API errors in the public response envelope.",
+      "HealthResponse": {
+        "additionalProperties": false,
+        "description": "Health check response.\n\nAttributes:\n    status: Service health marker.",
         "properties": {
-          "error": {
-            "$ref": "#/components/schemas/ErrorBody"
+          "status": {
+            "const": "ok",
+            "title": "Status",
+            "type": "string"
           }
         },
         "required": [
-          "error"
+          "status"
         ],
-        "title": "ErrorResponse",
+        "title": "HealthResponse",
         "type": "object"
       },
       "InstallationResponse": {
-        "description": "Return anonymous installation credentials to the extension.",
-        "example": {
-          "created_at": "2026-09-12T18:45:00Z",
-          "installation_id": "7de98bb2-6523-4f1d-b09d-caa8c92dd8f0",
-          "installation_token": "inst_0123456789abcdef",
-          "owner_id": "18800e89-4b37-4355-9f65-dd48f2f2bb5c"
-        },
+        "additionalProperties": false,
+        "description": "Response returned when issuing an anonymous installation credential.\n\nAttributes:\n    owner_id: Owner identifier created for this installation.\n    installation_credential: Bearer credential shown once to the extension.\n    token_type: Credential type used in the Authorization header.",
         "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "installation_id": {
-            "title": "Installation Id",
-            "type": "string"
-          },
-          "installation_token": {
-            "title": "Installation Token",
+          "installation_credential": {
+            "title": "Installation Credential",
             "type": "string"
           },
           "owner_id": {
+            "format": "uuid",
             "title": "Owner Id",
+            "type": "string"
+          },
+          "token_type": {
+            "const": "bearer",
+            "default": "bearer",
+            "title": "Token Type",
             "type": "string"
           }
         },
         "required": [
-          "installation_id",
-          "installation_token",
           "owner_id",
-          "created_at"
+          "installation_credential"
         ],
         "title": "InstallationResponse",
         "type": "object"
       },
       "ManualTaskCreateRequest": {
-        "description": "Create a manual task with an owner-scoped idempotency key.",
+        "additionalProperties": false,
+        "description": "Request to create a manual task with an owner-scoped idempotency key.\n\nAttributes:\n    client_request_id: Client-generated idempotency key.\n    title: User-visible manual task title.",
         "example": {
           "client_request_id": "sidebar-manual-001",
           "title": "Review Yokohama tabs before standup"
@@ -116,7 +101,8 @@
         "type": "object"
       },
       "ManualTaskPatchRequest": {
-        "description": "Patch mutable fields on a manual task.",
+        "additionalProperties": false,
+        "description": "Request to patch mutable fields on a manual task.\n\nAttributes:\n    title: Optional replacement title.\n    status: Optional replacement task status.\n    status_reason: Optional replacement or explicit null status reason.",
         "example": {
           "status": "action_complete",
           "status_reason": "Marked complete by the user.",
@@ -164,7 +150,7 @@
         "type": "object"
       },
       "ProcessingState": {
-        "description": "Enumerate asynchronous processing states for a task.",
+        "description": "Background processing state values.",
         "enum": [
           "queued",
           "running",
@@ -174,36 +160,12 @@
         "title": "ProcessingState",
         "type": "string"
       },
-      "TaskListResponse": {
-        "description": "Return all task cards visible to the authenticated owner.",
-        "properties": {
-          "tasks": {
-            "items": {
-              "$ref": "#/components/schemas/TaskResponse"
-            },
-            "title": "Tasks",
-            "type": "array"
-          }
-        },
-        "required": [
-          "tasks"
-        ],
-        "title": "TaskListResponse",
-        "type": "object"
-      },
-      "TaskOrigin": {
-        "description": "Enumerate the source that created a task.",
-        "enum": [
-          "manual",
-          "detected"
-        ],
-        "title": "TaskOrigin",
-        "type": "string"
-      },
-      "TaskResponse": {
-        "description": "Return a sidebar task card.",
+      "TaskCard": {
+        "additionalProperties": false,
+        "description": "Task card returned to the extension sidebar.\n\nAttributes:\n    id: Stable task identifier.\n    origin: Whether the task is detected or manual.\n    source_key: Nullable source key for detected tasks.\n    source_url: Nullable source URL used for return-to-tab behavior.\n    type: Supported task type.\n    title: User-visible task title.\n    status: User-visible task status.\n    status_reason: Optional status explanation.\n    summary: Optional grounded summary.\n    processing_state: Background processing state.\n    processing_error_code: Optional processing error code.\n    observed_at: Latest source observation time.\n    updated_at: Timestamp when the task last changed.",
         "properties": {
           "id": {
+            "format": "uuid",
             "title": "Id",
             "type": "string"
           },
@@ -273,8 +235,15 @@
             "title": "Status Reason"
           },
           "summary": {
-            "title": "Summary",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
           },
           "title": {
             "title": "Title",
@@ -304,11 +273,38 @@
           "observed_at",
           "updated_at"
         ],
-        "title": "TaskResponse",
+        "title": "TaskCard",
         "type": "object"
       },
+      "TaskListResponse": {
+        "additionalProperties": false,
+        "description": "Response containing owner-scoped task cards.\n\nAttributes:\n    tasks: Task cards visible to the authenticated owner.",
+        "properties": {
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/TaskCard"
+            },
+            "title": "Tasks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tasks"
+        ],
+        "title": "TaskListResponse",
+        "type": "object"
+      },
+      "TaskOrigin": {
+        "description": "Allowed task origin values.",
+        "enum": [
+          "detected",
+          "manual"
+        ],
+        "title": "TaskOrigin",
+        "type": "string"
+      },
       "TaskStatus": {
-        "description": "Enumerate user-visible task workflow states.",
+        "description": "User-visible task status values.",
         "enum": [
           "in_progress",
           "needs_attention",
@@ -319,38 +315,110 @@
         "type": "string"
       },
       "TaskType": {
-        "description": "Enumerate supported task categories.",
+        "description": "Supported high-level task categories.",
         "enum": [
-          "manual",
           "github",
           "research",
           "email",
           "travel",
           "shopping",
-          "other"
+          "manual"
         ],
         "title": "TaskType",
         "type": "string"
-      }
-    },
-    "securitySchemes": {
-      "HTTPBearer": {
-        "scheme": "bearer",
-        "type": "http"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
       }
     }
   },
   "info": {
-    "description": "Owner-scoped API for browser task sidebar cards and onboarding.",
     "title": "Browser Task Sidebar API",
     "version": "0.1.0"
   },
   "openapi": "3.1.0",
   "paths": {
+    "/healthz": {
+      "get": {
+        "description": "Return a simple service health response.\n\nReturns:\n    A successful health response.",
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Healthz",
+        "tags": [
+          "health"
+        ]
+      }
+    },
     "/v1/data": {
       "delete": {
-        "description": "Delete retained task data for the authenticated owner.\n\nArgs:\n    owner: The authenticated owner boundary.\n    repository: The repository that stores task data.\n\nReturns:\n    Counts for the deleted owner-scoped records.",
+        "description": "Delete retained task, scan, source, observation, and image data.\n\nArgs:\n    owner: Authenticated owner resolved from bearer credentials.\n    session: Database session used to delete owner-scoped records.\n\nReturns:\n    Counts for deleted owner-scoped task records.",
         "operationId": "clear_data_v1_data_delete",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -362,62 +430,17 @@
             },
             "description": "Successful Response"
           },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
+            "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "Clear Data",
         "tags": [
           "tasks"
@@ -426,7 +449,7 @@
     },
     "/v1/installations": {
       "post": {
-        "description": "Create an anonymous installation credential.\n\nArgs:\n    repository: The repository that persists the owner boundary.\n\nReturns:\n    The installation credential and owner identifier.",
+        "description": "Issue an anonymous installation credential.\n\nArgs:\n    session: Database session used to persist the owner.\n\nReturns:\n    The owner identifier and one-time bearer credential for the extension.",
         "operationId": "create_installation_v1_installations_post",
         "responses": {
           "201": {
@@ -438,56 +461,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
           }
         },
         "summary": "Create Installation",
@@ -498,8 +471,26 @@
     },
     "/v1/tasks": {
       "get": {
-        "description": "List task cards for the authenticated owner.\n\nArgs:\n    owner: The authenticated owner boundary.\n    repository: The repository that stores task data.\n\nReturns:\n    The owner's task cards.",
+        "description": "Return task cards visible to the authenticated owner.\n\nArgs:\n    owner: Authenticated owner resolved from bearer credentials.\n    session: Database session used to load tasks.\n\nReturns:\n    Owner-scoped task cards ordered by most recently updated first.",
         "operationId": "list_tasks_v1_tasks_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -511,70 +502,43 @@
             },
             "description": "Successful Response"
           },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
+            "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "List Tasks",
         "tags": [
           "tasks"
         ]
       },
       "post": {
-        "description": "Create an idempotent manual task for the authenticated owner.\n\nArgs:\n    request: The manual task creation payload.\n    owner: The authenticated owner boundary.\n    repository: The repository that stores task data.\n\nReturns:\n    The created or replayed manual task.",
+        "description": "Create an idempotent manual task for the authenticated owner.\n\nArgs:\n    request: Manual task payload with client idempotency key.\n    owner: Authenticated owner resolved from bearer credentials.\n    session: Database session used to create or load the task.\n\nReturns:\n    Created or replayed manual task card.",
         "operationId": "create_manual_task_v1_tasks_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -590,68 +554,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TaskResponse"
+                  "$ref": "#/components/schemas/TaskCard"
                 }
               }
             },
             "description": "Successful Response"
           },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
+            "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "Create Manual Task",
         "tags": [
           "tasks"
@@ -660,7 +579,7 @@
     },
     "/v1/tasks/{task_id}": {
       "delete": {
-        "description": "Delete one task owned by the authenticated owner.\n\nArgs:\n    task_id: The task identifier from the URL.\n    owner: The authenticated owner boundary.\n    repository: The repository that stores task data.\n\nReturns:\n    An empty 204 response when the task is deleted.\n\nRaises:\n    HTTPException: Raised with 404 when the task is absent for this owner.",
+        "description": "Delete one task owned by the authenticated owner.\n\nArgs:\n    task_id: Task identifier from the URL.\n    owner: Authenticated owner resolved from bearer credentials.\n    session: Database session used to delete the task.\n\nReturns:\n    Empty 204 response when deletion succeeds.\n\nRaises:\n    HTTPException: Raised with 404 when the task is absent for this owner.",
         "operationId": "delete_task_v1_tasks__task_id__delete",
         "parameters": [
           {
@@ -668,8 +587,25 @@
             "name": "task_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Task Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
             }
           }
         ],
@@ -677,69 +613,24 @@
           "204": {
             "description": "Successful Response"
           },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
+            "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "Delete Task",
         "tags": [
           "tasks"
         ]
       },
       "patch": {
-        "description": "Patch a manual task owned by the authenticated owner.\n\nArgs:\n    task_id: The task identifier from the URL.\n    request: The mutable manual task fields to update.\n    owner: The authenticated owner boundary.\n    repository: The repository that stores task data.\n\nReturns:\n    The updated task.\n\nRaises:\n    HTTPException: Raised with 400 for empty patches or 404 for absent tasks.",
+        "description": "Patch a manual task owned by the authenticated owner.\n\nArgs:\n    task_id: Task identifier from the URL.\n    request: Mutable manual task fields to update.\n    owner: Authenticated owner resolved from bearer credentials.\n    session: Database session used to update the task.\n\nReturns:\n    Updated manual task card.\n\nRaises:\n    HTTPException: Raised with 400 for empty patches or 404 for absent tasks.",
         "operationId": "update_manual_task_v1_tasks__task_id__patch",
         "parameters": [
           {
@@ -747,8 +638,25 @@
             "name": "task_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Task Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
             }
           }
         ],
@@ -767,68 +675,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TaskResponse"
+                  "$ref": "#/components/schemas/TaskCard"
                 }
               }
             },
             "description": "Successful Response"
           },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
+            "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "Update Manual Task",
         "tags": [
           "tasks"

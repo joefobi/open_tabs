@@ -1,31 +1,45 @@
-"""Expose anonymous installation onboarding routes."""
+"""Routes for anonymous installation onboarding."""
+
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
+from sqlalchemy.orm import Session
 
-from backend.app.db.repository import TaskRepository, get_repository
-from backend.app.schemas.installations import InstallationResponse
+from backend.app.auth.anonymous import (
+    generate_installation_credential,
+    hash_installation_credential,
+)
+from backend.app.db.models import Owner
+from backend.app.dependencies import get_session
+from backend.app.schemas.identity import InstallationResponse
 
 router = APIRouter(prefix="/v1/installations", tags=["installations"])
 
 
 @router.post(
-    "", response_model=InstallationResponse, status_code=status.HTTP_201_CREATED
+    "",
+    response_model=InstallationResponse,
+    status_code=status.HTTP_201_CREATED,
 )
-async def create_installation(
-    repository: TaskRepository = Depends(get_repository),
+def create_installation(
+    session: Session = Depends(get_session),
 ) -> InstallationResponse:
-    """Create an anonymous installation credential.
+    """Issue an anonymous installation credential.
 
     Args:
-        repository: The repository that persists the owner boundary.
+        session: Database session used to persist the owner.
 
     Returns:
-        The installation credential and owner identifier.
+        The owner identifier and one-time bearer credential for the extension.
     """
-    owner = repository.create_owner()
+
+    credential = generate_installation_credential()
+    owner = Owner(installation_credential_hash=hash_installation_credential(credential))
+    session.add(owner)
+    session.commit()
+    session.refresh(owner)
+
     return InstallationResponse(
-        installation_id=owner.installation_id,
-        installation_token=owner.installation_token,
-        owner_id=owner.owner_id,
-        created_at=owner.created_at,
+        owner_id=UUID(owner.id),
+        installation_credential=credential,
     )

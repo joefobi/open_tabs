@@ -1,34 +1,27 @@
-"""Export the FastAPI OpenAPI contract."""
+"""OpenAPI export helper."""
 
 import json
 from pathlib import Path
-from typing import Any
 
 from backend.app.main import create_app
 
 
-def build_openapi() -> dict[str, Any]:
-    """Build the OpenAPI schema.
-
-    Returns:
-        The generated OpenAPI schema.
-    """
-    return create_app().openapi()
-
-
-def write_openapi(path: Path) -> None:
-    """Write the OpenAPI schema to disk.
+def export_openapi(path: Path) -> None:
+    """Write the API OpenAPI schema to a JSON file.
 
     Args:
-        path: The output path for the OpenAPI JSON file.
+        path: Destination path for the JSON schema.
     """
+
+    schema = create_app().openapi()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(build_openapi(), indent=2, sort_keys=True) + "\n")
+    path.write_text(json.dumps(schema, indent=2, sort_keys=True) + "\n")
 
 
 def main() -> None:
-    """Write the repository's checked-in OpenAPI contract."""
-    write_openapi(Path("contracts/openapi.json"))
+    """Export the OpenAPI schema to the contracts directory."""
+
+    export_openapi(Path("contracts/openapi.json"))
 
 
 if __name__ == "__main__":

@@ -1,144 +1,70 @@
-"""Create and configure the FastAPI backend application."""
+"""FastAPI application entrypoint."""
 
-from collections.abc import Sequence
-from typing import Any
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
 
-from backend.app.routes import installations, tasks
-from backend.app.schemas.common import ErrorBody, ErrorResponse
-
-
-def _error_code(status_code: int) -> str:
-    """Return the API error code for an HTTP status.
-
-    Args:
-        status_code: The HTTP status code.
-
-    Returns:
-        The stable API error code.
-    """
-    codes = {
-        400: "bad_request",
-        401: "unauthorized",
-        404: "not_found",
-        422: "invalid_request",
-        429: "rate_limited",
-    }
-    return codes.get(status_code, "internal_error")
+from backend.app.db.session import Database
+from backend.app.dependencies import get_database
+from backend.app.errors import http_exception_handler, validation_exception_handler
+from backend.app.routes.health import router as health_router
+from backend.app.routes.installations import router as installations_router
+from backend.app.routes.tasks import router as tasks_router
 
 
-def _error_response(
-    *,
-    status_code: int,
-    code: str,
-    message: str,
-    retryable: bool = False,
-) -> JSONResponse:
-    """Build a public API error response.
+def create_app(database: Database | None = None) -> FastAPI:
+    """Create and configure the FastAPI application.
 
     Args:
-        status_code: The HTTP status code for the response.
-        code: The stable machine-readable error code.
-        message: The user-safe error message.
-        retryable: Whether the client should retry the same request later.
+        database: Optional database handle for tests or custom runtimes.
 
     Returns:
-        The serialized JSON error response.
+        Configured FastAPI application.
     """
-    return JSONResponse(
-        status_code=status_code,
-        content=ErrorResponse(
-            error=ErrorBody(code=code, message=message, retryable=retryable)
-        ).model_dump(),
-    )
 
+    active_database = database
 
-def _validation_message(errors: Sequence[dict[str, Any]]) -> str:
-    """Summarize request validation failures.
+    if active_database is None:
+        from backend.app.dependencies import build_database
 
-    Args:
-        errors: The validation errors emitted by FastAPI.
+        active_database = build_database()
 
-    Returns:
-        A concise public error message.
-    """
-    if not errors:
-        return "Request validation failed."
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        """Create local database schema and run the application lifespan.
 
-    first_error = errors[0]
-    location = ".".join(str(part) for part in first_error.get("loc", ()))
-    message = str(first_error.get("msg", "Invalid value."))
-    if location:
-        return f"{location}: {message}"
-    return message
+        Args:
+            _: FastAPI application instance.
 
+        Yields:
+            Control to FastAPI while the application is running.
+        """
 
-def create_app() -> FastAPI:
-    """Create the FastAPI application.
+        active_database.create_schema()
+        yield
 
-    Returns:
-        The configured FastAPI application.
-    """
+    def database_override() -> Database:
+        """Return the database bound to this app instance.
+
+        Returns:
+            The database handle configured for this app.
+        """
+
+        return active_database
+
     app = FastAPI(
         title="Browser Task Sidebar API",
         version="0.1.0",
-        description="Owner-scoped API for browser task sidebar cards and onboarding.",
-        responses={
-            400: {"model": ErrorResponse},
-            401: {"model": ErrorResponse},
-            404: {"model": ErrorResponse},
-            422: {"model": ErrorResponse},
-            429: {"model": ErrorResponse},
-        },
+        lifespan=lifespan,
     )
-
-    @app.exception_handler(HTTPException)
-    async def handle_http_exception(
-        _request: Request,
-        exc: HTTPException,
-    ) -> JSONResponse:
-        """Convert FastAPI HTTP exceptions into the API error envelope.
-
-        Args:
-            _request: The request that raised the exception.
-            exc: The FastAPI exception.
-
-        Returns:
-            The public JSON error response.
-        """
-        message = exc.detail if isinstance(exc.detail, str) else "Request failed."
-        return _error_response(
-            status_code=exc.status_code,
-            code=_error_code(exc.status_code),
-            message=message,
-            retryable=exc.status_code == 429,
-        )
-
-    @app.exception_handler(RequestValidationError)
-    async def handle_validation_exception(
-        _request: Request,
-        exc: RequestValidationError,
-    ) -> JSONResponse:
-        """Convert validation errors into the API error envelope.
-
-        Args:
-            _request: The request that raised the exception.
-            exc: The validation exception.
-
-        Returns:
-            The public JSON error response.
-        """
-        return _error_response(
-            status_code=422,
-            code="invalid_request",
-            message=_validation_message(exc.errors()),
-        )
-
-    app.include_router(installations.router)
-    app.include_router(tasks.router)
+    app.dependency_overrides[get_database] = database_override
+    app.add_exception_handler(HTTPException, http_exception_handler)
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.include_router(health_router)
+    app.include_router(installations_router)
+    app.include_router(tasks_router)
     return app
 
 

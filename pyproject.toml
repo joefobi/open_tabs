@@ -5,6 +5,9 @@ description = "Browser task detection and context summaries"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.141.1",
+    "pydantic>=2,<3",
+    "pydantic-settings>=2,<3",
+    "sqlalchemy>=2,<3",
     "uvicorn>=0.52.4",
 ]
 
