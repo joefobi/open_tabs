@@ -1,7 +1,16 @@
-# Browser Task Sidebar
+# OpenTabs AI
 
-Chrome extension with a Python backend for detecting tasks from page text, URL,
-and title, with optional screenshot fallback. See [the design](BACKEND_DESIGN.md).
+OpenTabs AI is a local-first Chrome extension and Python backend that turns a
+messy browser session into a sidebar of useful task cards. It observes permitted
+HTTP(S) tabs, extracts bounded page text, groups scanned pages by owner, and
+summarizes the work or context hiding across open tabs so users can recover what
+needs attention without manually reviewing every page.
+
+The project was built as part of an AI Tinkerers hackathon. The current MVP
+focuses on anonymous local installation, automatic page-text collection,
+owner-scoped scan ingestion, and sidebar cards for scanned tabs. Model-provider
+integration and optional screenshot fallback are intentionally deferred. See
+[the design](BACKEND_DESIGN.md) for architecture and product decisions.
 
 ## Local setup
 
