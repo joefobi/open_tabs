@@ -23,6 +23,8 @@ from backend.app.schemas.scans import (
     ScanResponse,
     ScanState,
 )
+from backend.app.schemas.tasks import ProcessingState
+from backend.app.workflows import run_detection_job, run_summary_job
 
 router = APIRouter(prefix="/v1/scans", tags=["scans"])
 
@@ -53,14 +55,13 @@ def create_scan(
 
     for attempt in range(2):
         try:
-            return _create_scan_once(request, owner, session)
+            response = _create_scan_once(request, owner, session)
+            return _process_scan_inline(session, response.scan_id)
         except IntegrityError as exc:
             session.rollback()
             existing = _scan_by_client_request_id(session, owner, request)
             if existing is not None:
-                return ScanCreateResponse(
-                    scan_id=UUID(existing.id), state=ScanState(existing.state)
-                )
+                return _process_scan_inline(session, UUID(existing.id))
             if attempt == 0:
                 continue
             raise HTTPException(
@@ -69,6 +70,44 @@ def create_scan(
             ) from exc
 
     raise RuntimeError("Scan retry loop exited unexpectedly.")
+
+
+def _process_scan_inline(session: Session, scan_id: UUID) -> ScanCreateResponse:
+    """Run local MVP detection and summary work for queued scan items.
+
+    Args:
+        session: Database session used to run workflow steps.
+        scan_id: Scan whose queued items should be processed.
+
+    Returns:
+        Current scan creation response after inline processing completes.
+
+    Raises:
+        ValueError: Raised when workflow rows referenced by the scan are missing.
+    """
+
+    item_ids = [
+        UUID(item.id)
+        for item in session.scalars(
+            select(ScanItem).where(
+                ScanItem.scan_id == str(scan_id),
+                ScanItem.processing_state == ScanItemState.QUEUED.value,
+            )
+        )
+    ]
+
+    for item_id in item_ids:
+        detection = run_detection_job(session, item_id)
+        if (
+            detection.task_id is not None
+            and detection.processing_state is ProcessingState.QUEUED
+        ):
+            run_summary_job(session, detection.task_id, detection.observation_id)
+
+    scan = session.get(Scan, str(scan_id))
+    if scan is None:
+        raise ValueError(f"Scan not found after inline processing: {scan_id}")
+    return ScanCreateResponse(scan_id=scan_id, state=ScanState(scan.state))
 
 
 @router.get("/{scan_id}", response_model=ScanResponse)

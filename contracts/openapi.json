@@ -639,6 +639,7 @@
           "email",
           "travel",
           "shopping",
+          "page",
           "manual"
         ],
         "title": "TaskType",

@@ -72,7 +72,7 @@ export interface ScanResponse {
 }
 
 export type TaskOrigin = "detected" | "manual";
-export type TaskType = "github" | "research" | "email" | "travel" | "shopping" | "manual";
+export type TaskType = "github" | "research" | "email" | "travel" | "shopping" | "page" | "manual";
 export type TaskStatus = "in_progress" | "needs_attention" | "action_complete" | "error";
 export type TaskProcessingState = "queued" | "running" | "ready" | "failed";
 
